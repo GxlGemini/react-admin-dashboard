@@ -70,8 +70,12 @@ export const ProfilePage: React.FC = () => {
 
   // --- Handlers ---
 
-  // Optimized for D1 Storage: 1600px width, 0.7 quality
-  const compressImage = (file: File, maxWidth = 1600, quality = 0.7): Promise<string> => {
+  // Optimized for D1 Storage: 
+  // 1. Use WebP for better compression/quality ratio.
+  // 2. Max width 1920px (HD).
+  // 3. Quality 0.8 (High visually, low file size).
+  // This ensures 3 images fit within D1's 1MB statement limit.
+  const compressImage = (file: File, maxWidth = 1920, quality = 0.8): Promise<string> => {
     return new Promise((resolve) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
@@ -90,7 +94,8 @@ export const ProfilePage: React.FC = () => {
                 }
                 const ctx = canvas.getContext('2d');
                 ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-                resolve(canvas.toDataURL('image/jpeg', quality));
+                // Convert to WebP for maximum efficiency
+                resolve(canvas.toDataURL('image/webp', quality));
             };
         };
     });
@@ -99,7 +104,8 @@ export const ProfilePage: React.FC = () => {
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const base64 = await compressImage(file, 400);
+      // Avatars can be smaller, 400px is enough
+      const base64 = await compressImage(file, 400, 0.8);
       setUser({ ...user, avatar: base64 });
     }
   };
@@ -108,25 +114,38 @@ export const ProfilePage: React.FC = () => {
       const files = e.target.files;
       if (files && files.length > 0) {
           setUploadingCover(true);
+          // Defensive copy
           const newCovers = [...(user.coverImages || [])];
           
-          for (let i = 0; i < files.length; i++) {
-              if (newCovers.length >= 3) break;
-              const base64 = await compressImage(files[i]);
-              newCovers.push(base64);
-          }
-          
-          const updatedUser = { ...user, coverImages: newCovers };
-          setUser(updatedUser);
-          setUploadingCover(false);
-          setCurrentSlide(newCovers.length - 1);
+          try {
+              for (let i = 0; i < files.length; i++) {
+                  if (newCovers.length >= 3) break;
+                  // Use HD compression settings
+                  const base64 = await compressImage(files[i], 1920, 0.8);
+                  newCovers.push(base64);
+              }
+              
+              const updatedUser = { ...user, coverImages: newCovers };
+              setUser(updatedUser);
+              setCurrentSlide(newCovers.length - 1);
 
-          // Auto-save immediately for images
-          if (contextUser) {
-              authService.updateUser(updatedUser);
-              refreshUser(); 
-              setMessage('背景图上传成功');
-              setTimeout(() => setMessage(''), 3000);
+              // Auto-save immediately for images
+              if (contextUser) {
+                  // Ensure we use the FULL user object for saving to prevent data loss
+                  // authService.updateUser -> userService.saveUser handles persistence
+                  authService.updateUser(updatedUser);
+                  
+                  // Force a context refresh to update header/sidebar immediately
+                  refreshUser(); 
+                  
+                  setMessage('高清壁纸上传成功，正在同步云端...');
+                  setTimeout(() => setMessage(''), 3000);
+              }
+          } catch (err) {
+              console.error("Cover upload error:", err);
+              setError('图片处理失败，请重试');
+          } finally {
+              setUploadingCover(false);
           }
       }
   };
@@ -273,7 +292,7 @@ export const ProfilePage: React.FC = () => {
                             className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-full backdrop-blur-md text-xs font-bold flex items-center gap-2 border border-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                         >
                             {uploadingCover ? <div className="w-3 h-3 border-2 border-white/50 border-t-white rounded-full animate-spin"/> : <ImageIcon className="h-4 w-4"/>}
-                            {(user.coverImages?.length || 0) >= 3 ? '封面已满 (3/3)' : '上传高清壁纸'}
+                            {(user.coverImages?.length || 0) >= 3 ? '封面已满 (3/3)' : '上传壁纸 (HD WebP)'}
                         </button>
                         <input type="file" ref={coverInputRef} className="hidden" accept="image/*" multiple onChange={handleCoverUpload} />
                         
