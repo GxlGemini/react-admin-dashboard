@@ -3,27 +3,28 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
 import { userService } from '../services/userService';
-import { Lock, User as UserIcon, AlertCircle, Eye, EyeOff, ArrowRight, Check, AlertTriangle, Sparkles, Crown, Star, Award, Users, X, Rocket, Construction, Shield, Briefcase, GraduationCap, User, Target, Clock } from 'lucide-react';
+import { activityService } from '../services/activityService';
+import { Lock, User as UserIcon, AlertCircle, Eye, EyeOff, ArrowRight, Check, AlertTriangle, Sparkles, Crown, Star, Award, Users, X, Rocket, Construction, Shield, Briefcase, GraduationCap, User, Target, Clock, UserPlus } from 'lucide-react';
 import { RoutePath, User as UserType } from '../types';
 import { useApp } from '../contexts/AppContext';
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
-  // Import lastSyncTime to trigger updates when cloud data arrives
   const { setUser, t, lastSyncTime } = useApp();
   
+  // Mode State: Login vs Register
+  const [isRegisterMode, setIsRegisterMode] = useState(false);
+
   // Form State
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('123456');
+  const [username, setUsername] = useState('root');
+  const [password, setPassword] = useState('');
+  const [nickname, setNickname] = useState(''); // For registration
   const [showPassword, setShowPassword] = useState(false);
   
   // UI State
   const [loginStatus, setLoginStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [capsLockOn, setCapsLockOn] = useState(false);
-  
-  // Dev Modal State
-  const [isDevModalOpen, setIsDevModalOpen] = useState(false);
   
   // Background Floating Elements State
   const [floatingUsers, setFloatingUsers] = useState<UserType[]>([]);
@@ -32,26 +33,18 @@ export const Login: React.FC = () => {
   const idleTimerRef = useRef<any>(null);
 
   useEffect(() => {
-      // 120 minutes = 120 * 60 * 1000 ms
       const IDLE_TIMEOUT = 120 * 60 * 1000; 
-
       const resetIdleTimer = () => {
           if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-          
           idleTimerRef.current = setTimeout(() => {
               console.log("Login page idle timeout. Clearing cache and refreshing.");
-              localStorage.clear(); // Clear all cache
-              window.location.reload(); // Hard refresh to reset state
+              localStorage.clear(); 
+              window.location.reload(); 
           }, IDLE_TIMEOUT);
       };
-
-      // Initial start
       resetIdleTimer();
-
-      // Listen for user activity
       const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
       events.forEach(event => window.addEventListener(event, resetIdleTimer));
-
       return () => {
           if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
           events.forEach(event => window.removeEventListener(event, resetIdleTimer));
@@ -59,7 +52,6 @@ export const Login: React.FC = () => {
   }, []);
 
   // Get all users for Avatar Matching Logic
-  // Added [lastSyncTime] dependency: When cloud sync finishes, this re-runs automatically
   const allUsersList = useMemo(() => {
       try {
           return userService.getUsers();
@@ -75,11 +67,8 @@ export const Login: React.FC = () => {
   }, [username, allUsersList]);
 
   // Effect: Load random users for background animation
-  // Re-runs when allUsersList updates (which happens when lastSyncTime updates)
   useEffect(() => {
     try {
-      // Shuffle and pick some users to display as floating bubbles
-      // Pick slightly more users for a richer background
       const shuffled = [...allUsersList].sort(() => 0.5 - Math.random()).slice(0, 15);
       setFloatingUsers(shuffled);
     } catch (e) {
@@ -104,24 +93,19 @@ export const Login: React.FC = () => {
     };
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
     setLoginStatus('loading');
 
     try {
-      // Artificial delay for smooth interaction feel
       await new Promise(resolve => setTimeout(resolve, 800));
-      
       const userProfile = await authService.login(username, password);
       
       if (userProfile) {
         setLoginStatus('success');
         setUser(userProfile);
-        
-        setTimeout(() => {
-            navigate(RoutePath.DASHBOARD);
-        }, 800);
+        setTimeout(() => navigate(RoutePath.DASHBOARD), 800);
       } else {
         setLoginStatus('error');
         setErrorMessage('用户名或密码错误');
@@ -135,8 +119,64 @@ export const Login: React.FC = () => {
     }
   };
 
-  const handleNotImplemented = () => {
-    setIsDevModalOpen(true);
+  const handleRegister = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setErrorMessage('');
+      setLoginStatus('loading');
+
+      // 1. Validation
+      if (!username.trim() || !password.trim()) {
+          setErrorMessage('请填写完整信息');
+          setLoginStatus('idle');
+          return;
+      }
+      
+      // 2. Duplicate Check
+      const existing = userService.getUserByUsername(username.trim());
+      if (existing) {
+          setErrorMessage('该用户名已被占用');
+          setLoginStatus('error');
+          setTimeout(() => setLoginStatus('idle'), 500);
+          return;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // 3. Create User Object
+      const isRoot = username.trim() === 'root';
+      const newUser: UserType = {
+          id: Date.now().toString(),
+          username: username.trim(),
+          nickname: nickname.trim() || username.trim(),
+          password: password.trim(),
+          email: '',
+          // ROOT LOGIC: If username is 'root', become admin with high points
+          role: isRoot ? 'admin' : 'user',
+          status: 'active',
+          points: isRoot ? 88888 : 100, // SVIP points for root
+          createdAt: new Date().toISOString().split('T')[0],
+          avatar: `https://ui-avatars.com/api/?name=${username.trim()}&background=${isRoot ? 'B8860B' : 'random'}&color=fff`,
+          coverImages: [],
+          tags: isRoot ? ['超级管理员', '系统核心'] : ['新用户'],
+          bio: isRoot ? '系统最高权限拥有者，掌控一切。' : '这家伙很懒，什么也没写。'
+      };
+
+      try {
+          // 4. Save
+          userService.saveUser(newUser);
+          activityService.logActivity(newUser, 'register', `用户 ${newUser.username} 自助注册成功`);
+          
+          // 5. Auto Login
+          const loggedIn = await authService.login(newUser.username, newUser.password);
+          if (loggedIn) {
+              setLoginStatus('success');
+              setUser(loggedIn);
+              setTimeout(() => navigate(RoutePath.DASHBOARD), 800);
+          }
+      } catch (err) {
+          setErrorMessage('注册失败，请稍后重试');
+          setLoginStatus('idle');
+      }
   };
 
   // Helper for rank info
@@ -186,22 +226,18 @@ export const Login: React.FC = () => {
 
       {/* --- Dynamic Floating Background --- */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
-          {/* Decorative Gradient Blobs */}
           <div className="absolute top-[-10%] left-[-10%] w-[600px] h-[600px] rounded-full bg-blue-100/40 blur-[120px] animate-pulse"></div>
           <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] rounded-full bg-indigo-100/40 blur-[120px] animate-pulse delay-1000"></div>
 
           {/* Floating User Bubbles */}
           {floatingUsers.map((u, i) => {
-              // Improve spacing logic to prevent overlap
               const slotWidth = 90 / floatingUsers.length; 
               const baseLeft = 5 + (i * slotWidth);
               const randomOffset = Math.random() * (slotWidth * 0.6); 
               const left = `${baseLeft + randomOffset}%`;
-
               const duration = 15 + (i % 5) * 4 + Math.random() * 5 + 's'; 
               const delay = -(Math.random() * 30) + 's'; 
               const scale = 0.7 + Math.random() * 0.3;
-              
               const rank = getRankInfo(u.points);
               const RankIcon = rank.icon;
 
@@ -222,13 +258,11 @@ export const Login: React.FC = () => {
                             className="w-12 h-12 rounded-full object-cover shadow-sm opacity-90"
                             alt=""
                           />
-                          {/* Rank Badge on Avatar */}
                           <div className={`absolute -right-1 -bottom-1 w-5 h-5 rounded-full flex items-center justify-center border border-white ${rank.bg} shadow-sm z-10`}>
                              <RankIcon size={10} className={rank.text} />
                           </div>
                       </div>
                       
-                      {/* Name & Rank Label - Fixed opacity to 100% as requested */}
                       <div className="flex flex-col items-center gap-1 opacity-100 group-hover:scale-105 transition-transform duration-300">
                           <span className="px-2 py-0.5 rounded-full bg-white/70 backdrop-blur-md text-[10px] font-bold text-slate-700 shadow-sm border border-white/50 whitespace-nowrap">
                               {u.nickname || u.username}
@@ -242,7 +276,7 @@ export const Login: React.FC = () => {
           })}
       </div>
 
-      {/* --- Main Login Card --- */}
+      {/* --- Main Card --- */}
       <div 
         className={`
             relative z-10 w-full max-w-[400px] p-8 m-4
@@ -251,7 +285,7 @@ export const Login: React.FC = () => {
             ${loginStatus === 'error' ? 'animate-shake ring-2 ring-red-100' : ''}
         `}
       >
-          {/* Timeout Indicator Hint - Moved tooltip to the RIGHT to avoid blocking avatar */}
+          {/* Timeout Indicator */}
           <div className="absolute top-4 right-4 group z-20">
               <div className="p-2 bg-white/50 rounded-full hover:bg-white/80 transition-colors cursor-help shadow-sm">
                   <Clock className="w-4 h-4 text-slate-400" />
@@ -264,55 +298,57 @@ export const Login: React.FC = () => {
 
           {/* Header */}
           <div className="text-center mb-8">
-             {/* Dynamic Icon/Avatar Container */}
              <div className="relative inline-flex items-center justify-center h-16 w-16 mb-5 mx-auto">
-                 
-                 {/* 1. Default Background (Gradient) */}
                  <div className={`
                     absolute inset-0 rounded-2xl transform transition-all duration-500 shadow-lg
-                    ${matchedUser 
+                    ${matchedUser && !isRegisterMode
                         ? 'bg-white rotate-0 scale-100 shadow-blue-500/10 border-2 border-white' 
                         : 'bg-gradient-to-tr from-blue-400 to-indigo-500 rotate-6 hover:rotate-12 shadow-blue-500/20'
                     }
                  `}></div>
 
-                 {/* 2. Default Icon (Sparkles) - Fades out if user matches */}
-                 <div className={`relative z-10 transition-all duration-500 transform ${matchedUser ? 'opacity-0 scale-50 rotate-180' : 'opacity-100 scale-100 rotate-0'}`}>
-                     <Sparkles className="h-8 w-8 text-white" />
-                 </div>
-
-                 {/* 3. Matched User Avatar - Fades in */}
-                 <div className={`
-                    absolute inset-0 z-20 rounded-2xl overflow-hidden shadow-sm transform transition-all duration-500
-                    ${matchedUser ? 'opacity-100 scale-100 rotate-0' : 'opacity-0 scale-50 -rotate-12'}
-                 `}>
-                    {matchedUser && (
-                        <img 
-                            src={matchedUser.avatar || `https://ui-avatars.com/api/?name=${matchedUser.username}`} 
-                            alt="User" 
-                            className="w-full h-full object-cover"
-                        />
-                    )}
-                 </div>
+                 {isRegisterMode ? (
+                     <div className="relative z-10 text-white animate-fade-in">
+                         <UserPlus className="h-8 w-8" />
+                     </div>
+                 ) : (
+                     <>
+                        <div className={`relative z-10 transition-all duration-500 transform ${matchedUser ? 'opacity-0 scale-50 rotate-180' : 'opacity-100 scale-100 rotate-0'}`}>
+                            <Sparkles className="h-8 w-8 text-white" />
+                        </div>
+                        <div className={`
+                            absolute inset-0 z-20 rounded-2xl overflow-hidden shadow-sm transform transition-all duration-500
+                            ${matchedUser ? 'opacity-100 scale-100 rotate-0' : 'opacity-0 scale-50 -rotate-12'}
+                        `}>
+                            {matchedUser && (
+                                <img 
+                                    src={matchedUser.avatar || `https://ui-avatars.com/api/?name=${matchedUser.username}`} 
+                                    alt="User" 
+                                    className="w-full h-full object-cover"
+                                />
+                            )}
+                        </div>
+                     </>
+                 )}
                  
-                 {/* Verified Badge (Optional nice touch) */}
-                 {matchedUser && (
-                     <div className="absolute -bottom-1 -right-1 z-30 bg-green-500 rounded-full p-1 border-2 border-white shadow-sm animate-bounce-in">
-                         <Check className="h-2 w-2 text-white" strokeWidth={4} />
+                 {/* Crown for Root/SVIP */}
+                 {(matchedUser?.username === 'root' || username === 'root') && (
+                     <div className="absolute -top-3 -right-3 z-30 bg-amber-100 rounded-full p-1.5 border-2 border-white shadow-sm animate-bounce">
+                         <Crown className="h-4 w-4 text-amber-500 fill-amber-400" />
                      </div>
                  )}
              </div>
 
              <h2 className="text-2xl font-bold text-slate-800 mb-2 tracking-tight">
-                 {matchedUser ? `${matchedUser.nickname || matchedUser.username}` : '欢迎回来'}
+                 {isRegisterMode ? '创建新账号' : (matchedUser ? matchedUser.nickname : '欢迎回来')}
              </h2>
              <p className="text-slate-500 text-sm">
-                 {matchedUser ? '请验证您的身份' : '登录以访问您的仪表盘'}
+                 {isRegisterMode ? '请填写您的注册信息' : (matchedUser ? '请验证您的身份' : '登录以访问您的仪表盘')}
              </p>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={isRegisterMode ? handleRegister : handleLogin} className="space-y-5">
               
               {errorMessage && (
                 <div className="flex items-center gap-2 text-sm text-red-500 bg-red-50/80 border border-red-100 px-4 py-3 rounded-xl animate-fade-in">
@@ -324,7 +360,7 @@ export const Login: React.FC = () => {
               {/* Username Field */}
               <div className="space-y-1">
                   <div className="relative group">
-                      <div className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${matchedUser ? 'text-[var(--color-primary)]' : 'text-slate-400 group-focus-within:text-blue-500'}`}>
+                      <div className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${matchedUser && !isRegisterMode ? 'text-[var(--color-primary)]' : 'text-slate-400 group-focus-within:text-blue-500'}`}>
                         <UserIcon className="h-5 w-5" />
                       </div>
                       <input
@@ -334,7 +370,7 @@ export const Login: React.FC = () => {
                         onChange={(e) => setUsername(e.target.value)}
                         className={`
                             w-full bg-white/50 border rounded-xl px-12 py-3.5 text-slate-700 outline-none transition-all placeholder:text-slate-400 font-medium
-                            ${matchedUser 
+                            ${matchedUser && !isRegisterMode
                                 ? 'border-blue-400 bg-blue-50/50 ring-4 ring-blue-50' 
                                 : 'border-slate-200 focus:bg-white focus:border-blue-400 focus:ring-4 focus:ring-blue-50'
                             }
@@ -345,6 +381,24 @@ export const Login: React.FC = () => {
                       />
                   </div>
               </div>
+
+              {/* Nickname Field (Register Only) */}
+              {isRegisterMode && (
+                  <div className="space-y-1 animate-slide-in-up">
+                      <div className="relative group">
+                          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500">
+                            <Target className="h-5 w-5" />
+                          </div>
+                          <input
+                            type="text"
+                            value={nickname}
+                            onChange={(e) => setNickname(e.target.value)}
+                            className="w-full bg-white/50 border border-slate-200 rounded-xl px-12 py-3.5 text-slate-700 outline-none focus:bg-white focus:border-blue-400 focus:ring-4 focus:ring-blue-50 transition-all placeholder:text-slate-400 font-medium"
+                            placeholder="请输入昵称 (选填)"
+                          />
+                      </div>
+                  </div>
+              )}
 
               {/* Password Field */}
               <div className="space-y-1">
@@ -358,7 +412,8 @@ export const Login: React.FC = () => {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         className="w-full bg-white/50 border border-slate-200 rounded-xl px-12 py-3.5 text-slate-700 outline-none focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 transition-all placeholder:text-slate-400 font-medium"
-                        placeholder="请输入密码"
+                        placeholder={isRegisterMode ? "设置密码" : "请输入密码"}
+                        required
                       />
                       <button
                         type="button"
@@ -371,23 +426,14 @@ export const Login: React.FC = () => {
                   </div>
               </div>
 
-              {/* Caps Lock & Forgot Password */}
-              <div className="flex items-center justify-between text-xs px-1">
-                  <div className="h-4">
-                    {capsLockOn && (
-                        <div className="flex items-center gap-1.5 text-amber-500 font-medium animate-pulse">
-                            <AlertTriangle className="h-3 w-3" />
-                            <span>大写锁定已开启</span>
-                        </div>
-                    )}
-                  </div>
-                  <button 
-                    type="button" 
-                    className="text-slate-500 hover:text-blue-600 transition-colors font-medium"
-                    onClick={handleNotImplemented}
-                  >
-                      忘记密码?
-                  </button>
+              {/* Caps Lock Alert */}
+              <div className="h-4 px-1">
+                {capsLockOn && (
+                    <div className="flex items-center gap-1.5 text-xs text-amber-500 font-medium animate-pulse">
+                        <AlertTriangle className="h-3 w-3" />
+                        <span>大写锁定已开启</span>
+                    </div>
+                )}
               </div>
 
               {/* Submit Button */}
@@ -407,34 +453,45 @@ export const Login: React.FC = () => {
                     {loginStatus === 'loading' ? (
                         <>
                             <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            <span>登录中...</span>
+                            <span>{isRegisterMode ? '注册中...' : '登录中...'}</span>
                         </>
                     ) : loginStatus === 'success' ? (
                         <>
                             <Check className="h-5 w-5 animate-bounce" />
-                            <span>验证通过</span>
+                            <span>{isRegisterMode ? '注册成功' : '验证通过'}</span>
                         </>
                     ) : (
                         <>
-                            <span>立即登录</span>
+                            <span>{isRegisterMode ? '立即注册' : '立即登录'}</span>
                             <ArrowRight className="h-4 w-4" />
                         </>
                     )}
                 </div>
               </button>
 
-              {/* Register Link */}
+              {/* Toggle Register/Login */}
               <div className="text-center pt-2">
                   <p className="text-xs text-slate-400">
-                      还没有账号?{' '}
+                      {isRegisterMode ? '已有账号? ' : '还没有账号? '}
                       <button 
                         type="button" 
-                        className="text-blue-600 font-bold hover:underline"
-                        onClick={handleNotImplemented}
+                        className="text-blue-600 font-bold hover:underline ml-1"
+                        onClick={() => {
+                            setIsRegisterMode(!isRegisterMode);
+                            setErrorMessage('');
+                            setLoginStatus('idle');
+                            setUsername(isRegisterMode ? 'root' : '');
+                            setPassword('');
+                        }}
                       >
-                          立即注册
+                          {isRegisterMode ? '直接登录' : '立即注册'}
                       </button>
                   </p>
+                  {isRegisterMode && (
+                      <p className="text-[10px] text-slate-400 mt-2 opacity-70">
+                          提示: 注册为 <strong>root</strong> 用户可直接获得至尊权限与皇冠图标。
+                      </p>
+                  )}
               </div>
           </form>
       </div>
@@ -445,43 +502,6 @@ export const Login: React.FC = () => {
             Admin Pro GXL &copy; 2026
          </p>
       </div>
-
-      {/* Styled Modal for Unimplemented Features */}
-      {isDevModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm animate-fade-in p-4">
-              <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl p-6 max-w-sm w-full border border-white transform transition-all scale-100 ring-4 ring-white/20">
-                  <div className="flex justify-end">
-                      <button 
-                          onClick={() => setIsDevModalOpen(false)}
-                          className="p-1.5 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-500 transition-colors"
-                      >
-                          <X className="h-4 w-4" />
-                      </button>
-                  </div>
-                  
-                  <div className="flex flex-col items-center text-center mt-[-20px]">
-                      <div className="h-20 w-20 rounded-full bg-indigo-50 flex items-center justify-center mb-4 relative overflow-hidden group">
-                           <div className="absolute inset-0 bg-gradient-to-tr from-blue-400/20 to-purple-400/20 animate-pulse"></div>
-                           {/* Rocket Animation Icon */}
-                           <Rocket className="h-10 w-10 text-[var(--color-primary)] group-hover:-translate-y-1 group-hover:translate-x-1 transition-transform duration-500" />
-                           <Construction className="h-5 w-5 text-amber-500 absolute bottom-3 right-3" />
-                      </div>
-                      
-                      <h3 className="text-xl font-bold text-gray-800 mb-2">功能即将上线</h3>
-                      <p className="text-sm text-gray-500 leading-relaxed mb-6 px-4">
-                          注册和找回密码功能正在紧锣密鼓地开发中。当前演示环境请直接使用默认账号登录。
-                      </p>
-                      
-                      <button
-                          onClick={() => setIsDevModalOpen(false)}
-                          className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-bold shadow-lg shadow-blue-500/30 hover:shadow-blue-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all"
-                      >
-                          我知道了
-                      </button>
-                  </div>
-              </div>
-          </div>
-      )}
     </div>
   );
 };

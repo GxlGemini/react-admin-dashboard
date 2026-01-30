@@ -49,13 +49,12 @@ export const ProfilePage: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync with context
+  // BUG FIX: Sync with context ONLY when NOT editing bio to prevent overwriting
   useEffect(() => {
-    if (contextUser) {
-        // Only update if IDs match to avoid overwriting ongoing edits with stale context
+    if (contextUser && !isEditingBio) { // Check !isEditingBio
         setUser(prev => prev?.id === contextUser.id ? { ...prev, ...contextUser } : { ...contextUser });
     }
-  }, [contextUser]);
+  }, [contextUser, isEditingBio]);
 
   // Carousel Auto-play
   useEffect(() => {
@@ -72,7 +71,6 @@ export const ProfilePage: React.FC = () => {
   // --- Handlers ---
 
   // Optimized for D1 Storage: 1600px width, 0.7 quality
-  // This balances HD look with storage constraints of TEXT columns
   const compressImage = (file: File, maxWidth = 1600, quality = 0.7): Promise<string> => {
     return new Promise((resolve) => {
         const reader = new FileReader();
@@ -123,10 +121,10 @@ export const ProfilePage: React.FC = () => {
           setUploadingCover(false);
           setCurrentSlide(newCovers.length - 1);
 
-          // Auto-save immediately
+          // Auto-save immediately for images
           if (contextUser) {
               authService.updateUser(updatedUser);
-              refreshUser(); // Update global state
+              refreshUser(); 
               setMessage('背景图上传成功');
               setTimeout(() => setMessage(''), 3000);
           }
@@ -275,7 +273,7 @@ export const ProfilePage: React.FC = () => {
                             className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-full backdrop-blur-md text-xs font-bold flex items-center gap-2 border border-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                         >
                             {uploadingCover ? <div className="w-3 h-3 border-2 border-white/50 border-t-white rounded-full animate-spin"/> : <ImageIcon className="h-4 w-4"/>}
-                            {(user.coverImages?.length || 0) >= 3 ? '封面已满' : '上传高清壁纸'}
+                            {(user.coverImages?.length || 0) >= 3 ? '封面已满 (3/3)' : '上传高清壁纸'}
                         </button>
                         <input type="file" ref={coverInputRef} className="hidden" accept="image/*" multiple onChange={handleCoverUpload} />
                         

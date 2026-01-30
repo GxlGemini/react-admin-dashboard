@@ -23,13 +23,16 @@ CREATE TABLE users (
 CREATE INDEX idx_users_username ON users(username);
 
 -- 1.1 User Profiles Table (Extended Info)
+-- UPDATED: Split cover_images into 3 columns
 CREATE TABLE user_profiles (
     user_id TEXT PRIMARY KEY,
     nickname TEXT,
     avatar TEXT,
     points INTEGER DEFAULT 0,
     last_check_in TEXT,
-    cover_images TEXT, -- JSON Array of strings
+    cover_image_1 TEXT, 
+    cover_image_2 TEXT, 
+    cover_image_3 TEXT,
     bio TEXT,
     tags TEXT, -- JSON Array of strings
     socials TEXT, -- JSON Object

@@ -81,30 +81,37 @@ export const onRequestGet = async (context: Context) => {
         
         if (key === 'users') {
             // JOIN Logic: Merge users (Auth) + user_profiles (Details)
+            // UPDATED: Select individual cover images
             const { results } = await env.DB.prepare(`
                 SELECT 
                     u.id, u.username, u.email, u.password, u.role, u.status, u.created_at as createdAt,
                     p.nickname, p.avatar, p.points, 
                     p.last_check_in as lastCheckIn, 
-                    p.cover_images as coverImages, 
+                    p.cover_image_1, p.cover_image_2, p.cover_image_3,
                     p.bio, p.tags, p.socials
                 FROM users u
                 LEFT JOIN user_profiles p ON u.id = p.user_id
                 ORDER BY u.updated_at DESC
             `).all();
             
-            // Parse JSON fields (D1 returns TEXT, we must parse it back to JSON)
+            // Parse JSON fields and merge images
             responseData[key] = results.map((u: any) => {
-                let coverImages = [];
+                let coverImages: string[] = [];
+                if (u.cover_image_1) coverImages.push(u.cover_image_1);
+                if (u.cover_image_2) coverImages.push(u.cover_image_2);
+                if (u.cover_image_3) coverImages.push(u.cover_image_3);
+
                 let tags = [];
                 let socials = {};
 
-                try { coverImages = u.coverImages ? JSON.parse(u.coverImages) : []; } catch(e) {}
                 try { tags = u.tags ? JSON.parse(u.tags) : []; } catch(e) {}
                 try { socials = u.socials ? JSON.parse(u.socials) : {}; } catch(e) {}
 
+                // Clean up raw columns from response object
+                const { cover_image_1, cover_image_2, cover_image_3, ...cleanUser } = u;
+
                 return {
-                    ...u,
+                    ...cleanUser,
                     coverImages,
                     tags,
                     socials
@@ -181,10 +188,14 @@ export const onRequestPost = async (context: Context) => {
         if (key === 'users') {
             const users = Array.isArray(data) ? data : [];
             for (const u of users) {
-                // SECURITY & SERIALIZATION FIX
-                const coverImagesStr = JSON.stringify(Array.isArray(u.coverImages) ? u.coverImages : []);
                 const tagsStr = JSON.stringify(Array.isArray(u.tags) ? u.tags : []);
                 const socialsStr = JSON.stringify(u.socials || {});
+                
+                // UPDATED: Split coverImages array into 3 columns
+                const covers = Array.isArray(u.coverImages) ? u.coverImages : [];
+                const img1 = covers[0] || null;
+                const img2 = covers[1] || null;
+                const img3 = covers[2] || null;
 
                 // 1. Update Core User Info (users Table)
                 d1Statements.push(env.DB.prepare(`
@@ -209,16 +220,18 @@ export const onRequestPost = async (context: Context) => {
                 ));
 
                 // 2. Update Profile Info (user_profiles Table)
-                // Note: user_id is the foreign key link
+                // UPDATED: Bind 3 image columns
                 d1Statements.push(env.DB.prepare(`
-                    INSERT INTO user_profiles (user_id, nickname, avatar, points, last_check_in, cover_images, bio, tags, socials, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO user_profiles (user_id, nickname, avatar, points, last_check_in, cover_image_1, cover_image_2, cover_image_3, bio, tags, socials, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(user_id) DO UPDATE SET
                         nickname=excluded.nickname,
                         avatar=excluded.avatar, 
                         points=excluded.points,
                         last_check_in=excluded.last_check_in, 
-                        cover_images=excluded.cover_images, 
+                        cover_image_1=excluded.cover_image_1,
+                        cover_image_2=excluded.cover_image_2,
+                        cover_image_3=excluded.cover_image_3,
                         bio=excluded.bio, 
                         tags=excluded.tags, 
                         socials=excluded.socials, 
@@ -229,7 +242,7 @@ export const onRequestPost = async (context: Context) => {
                     u.avatar || null, 
                     u.points || 0, 
                     u.lastCheckIn || null, 
-                    coverImagesStr, 
+                    img1, img2, img3,
                     u.bio || '', 
                     tagsStr,        
                     socialsStr,     
@@ -265,8 +278,6 @@ export const onRequestPost = async (context: Context) => {
     // Execute D1 Batch
     let d1Result;
     if (d1Statements.length > 0) {
-        // Log query count for debugging
-        // console.log(`Executing ${d1Statements.length} D1 statements`);
         d1Result = await env.DB.batch(d1Statements);
     }
     

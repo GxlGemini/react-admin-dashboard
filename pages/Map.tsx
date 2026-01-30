@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import * as echarts from 'echarts';
 import { useApp } from '../contexts/AppContext';
@@ -108,35 +109,40 @@ export const MapPage: React.FC = () => {
     const updateChartOption = (chart: echarts.ECharts) => {
         const isDark = theme.mode === 'dark';
         
-        // --- Theme Config ---
+        // --- High-Tech Dark Mode Palette ---
+        // Enhanced colors for "Cyberpunk" look in Dark mode
         const colors = {
             business: {
-                area: isDark ? '#1e293b' : '#f1f5f9',
-                borderColor: isDark ? '#334155' : '#cbd5e1',
+                area: isDark ? '#0f172a' : '#f1f5f9',
+                borderColor: isDark ? '#1e40af' : '#cbd5e1', // Deeper blue border
                 line: '#3b82f6',
                 point: '#60a5fa',
-                effect: '#2563eb'
+                effect: '#2563eb',
+                shadow: isDark ? '#1d4ed8' : '#bfdbfe'
             },
             infra: {
                 area: isDark ? '#1e1b4b' : '#f3e8ff', 
-                borderColor: isDark ? '#4c1d95' : '#d8b4fe',
+                borderColor: isDark ? '#6b21a8' : '#d8b4fe',
                 line: '#a855f7',
                 point: '#d8b4fe',
-                effect: '#7c3aed'
+                effect: '#7c3aed',
+                shadow: isDark ? '#5b21b6' : '#e9d5ff'
             },
             security: {
                 area: isDark ? '#2a0a0a' : '#fef2f2', 
-                borderColor: isDark ? '#7f1d1d' : '#fecaca',
+                borderColor: isDark ? '#991b1b' : '#fecaca',
                 line: '#ef4444',
                 point: '#fca5a5',
-                effect: '#dc2626'
+                effect: '#dc2626',
+                shadow: isDark ? '#b91c1c' : '#fecaca'
             },
             globe: {
-                area: isDark ? '#0f172a' : '#f0f9ff',
-                borderColor: isDark ? '#1e293b' : '#bae6fd',
+                area: isDark ? '#0c4a6e' : '#f0f9ff',
+                borderColor: isDark ? '#0369a1' : '#bae6fd',
                 line: '#0ea5e9',
                 point: '#38bdf8',
-                effect: '#0284c7'
+                effect: '#0284c7',
+                shadow: isDark ? '#0369a1' : '#bae6fd'
             }
         }[viewMode];
 
@@ -203,23 +209,24 @@ export const MapPage: React.FC = () => {
                 center: [105, 36],
                 label: { 
                     show: true, 
-                    color: isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.3)',
+                    color: isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)', // Brighter labels
                     fontSize: 10
                 },
                 itemStyle: {
                     areaColor: colors.area,
                     borderColor: colors.borderColor,
                     borderWidth: 1.5,
-                    shadowColor: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.1)',
-                    shadowBlur: 10,
+                    shadowColor: colors.shadow, // Colored Glow
+                    shadowBlur: 20,
                     shadowOffsetY: 5
                 },
                 emphasis: {
                     itemStyle: { 
                         areaColor: isDark ? '#334155' : '#e2e8f0',
-                        shadowBlur: 15 
+                        shadowBlur: 30,
+                        shadowColor: colors.effect
                     },
-                    label: { show: true, color: isDark ? '#fff' : '#000' }
+                    label: { show: true, color: isDark ? '#fff' : '#000', fontWeight: 'bold' }
                 }
             },
             series: [
@@ -227,14 +234,18 @@ export const MapPage: React.FC = () => {
                     type: 'effectScatter',
                     coordinateSystem: 'geo',
                     data: scatterData.filter(d => HUBS.includes(d.name)),
-                    symbolSize: viewMode === 'security' ? 15 : 12,
+                    symbolSize: viewMode === 'security' ? 18 : 14,
                     rippleEffect: {
-                        brushType: 'fill', 
-                        scale: viewMode === 'security' ? 6 : 4,
-                        period: viewMode === 'security' ? 2 : 4, 
+                        brushType: 'stroke', // Crisp ripples
+                        scale: viewMode === 'security' ? 8 : 5,
+                        period: 3, 
                         color: colors.effect
                     },
-                    itemStyle: { color: colors.effect },
+                    itemStyle: { 
+                        color: colors.effect,
+                        shadowBlur: 10,
+                        shadowColor: colors.effect 
+                    },
                     label: {
                         show: true,
                         position: 'right',
@@ -244,26 +255,26 @@ export const MapPage: React.FC = () => {
                         color: isDark ? '#fff' : '#333',
                         textBorderColor: isDark ? '#000' : '#fff',
                         textBorderWidth: 2,
-                        backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)',
+                        backgroundColor: isDark ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.7)',
                         borderRadius: 4,
                         padding: [4, 6]
                     },
-                    zlevel: 2
+                    zlevel: 3
                 },
                 {
                     type: 'scatter',
                     coordinateSystem: 'geo',
                     data: scatterData.filter(d => !HUBS.includes(d.name)),
                     symbolSize: 6,
-                    itemStyle: { color: colors.point, opacity: 0.7 },
+                    itemStyle: { color: colors.point, opacity: 0.8 },
                     label: {
                         show: true,
                         position: 'right',
                         formatter: '{b}',
-                        fontSize: 10,
-                        color: isDark ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.8)',
+                        fontSize: 9,
+                        color: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)',
                         textBorderColor: isDark ? '#000' : '#fff',
-                        textBorderWidth: 1.5
+                        textBorderWidth: 1
                     },
                     zlevel: 2
                 },
@@ -272,14 +283,14 @@ export const MapPage: React.FC = () => {
                     effect: {
                         show: true,
                         period: viewMode === 'security' ? 2 : 4, 
-                        trailLength: viewMode === 'security' ? 0.8 : 0.5, 
+                        trailLength: 0.7, 
                         color: colors.line,
                         symbol: viewMode === 'infra' ? 'rect' : 'arrow',
-                        symbolSize: viewMode === 'security' ? 6 : 4
+                        symbolSize: 5
                     },
                     lineStyle: {
                         color: colors.line,
-                        width: 0,
+                        width: 0, 
                         curveness: 0.2
                     },
                     data: linesData,
@@ -326,11 +337,14 @@ export const MapPage: React.FC = () => {
             }
 
             try {
-                const response = await fetch('https://geo.datav.aliyun.com/areas_v3/bound/100000_full.json');
+                // Try fetching high-quality GeoJSON first
+                const response = await fetch('/100000_full.json');
                 if (!response.ok) throw new Error('Network error');
                 const geoJson = await response.json();
                 echarts.registerMap('china', geoJson);
             } catch (aliyunError) {
+                // Fallback to local data if external fetch fails
+                console.warn("Falling back to local map data");
                 if (localGeoJson && localGeoJson.features) {
                      echarts.registerMap('china', localGeoJson as any);
                 } else {
@@ -589,7 +603,7 @@ export const MapPage: React.FC = () => {
 
         <div ref={chartRef} className="w-full h-full z-10 transition-all duration-500"></div>
         <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-gray-400 opacity-50 z-10 pointer-events-none">
-            GEO-SPATIAL INTELLIGENCE SYSTEM v3.0
+            GEO-SPATIAL INTELLIGENCE SYSTEM v4.0
         </div>
     </div>
   );
