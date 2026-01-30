@@ -25,10 +25,10 @@ const BilibiliIcon = ({ className }: { className?: string }) => (
 );
 
 export const ProfilePage: React.FC = () => {
-  const { user: contextUser, refreshUser, t, profileOpacity, setProfileOpacity } = useApp();
+  const { user: contextUser, refreshUser, t, profileOpacity, setProfileOpacity, isSyncing } = useApp();
   
-  // Local state for profile fields
-  const [user, setUser] = useState<UserProfile | null>(contextUser ? { ...contextUser } : null);
+  // Initialize with null, then load full data in Effect
+  const [user, setUser] = useState<UserProfile | null>(null);
   
   // Password state
   const [newPassword, setNewPassword] = useState('');
@@ -49,12 +49,40 @@ export const ProfilePage: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
-  // BUG FIX: Sync with context ONLY when NOT editing bio to prevent overwriting
+  // --- Critical Fix for Data Loading ---
+  // The contextUser from authService is lightweight (stripped images).
+  // We MUST fetch the full user profile from userService to get the images.
   useEffect(() => {
-    if (contextUser && !isEditingBio) { // Check !isEditingBio
-        setUser(prev => prev?.id === contextUser.id ? { ...prev, ...contextUser } : { ...contextUser });
+    if (contextUser) {
+        // 1. Fetch full data from local storage (source of truth for heavy data)
+        const fullUser = userService.getUserById(contextUser.id);
+        
+        // 2. Merge with context (for latest session status) but prioritize fullUser for data fields
+        if (fullUser) {
+            setUser(prev => {
+                // If we are editing bio, don't overwrite it, but do update images/points
+                if (isEditingBio && prev) {
+                    return {
+                        ...prev,
+                        points: contextUser.points, // Keep points synced
+                        coverImages: fullUser.coverImages || [], // Ensure images are present
+                    };
+                }
+                return {
+                    ...fullUser,
+                    ...contextUser, // Context might have newer token-related fields
+                    coverImages: fullUser.coverImages || [], // Explicitly take images from fullUser
+                    bio: fullUser.bio, 
+                    tags: fullUser.tags,
+                    socials: fullUser.socials
+                };
+            });
+        } else {
+            // Fallback if not found in user list (rare)
+            setUser({ ...contextUser, coverImages: [] });
+        }
     }
-  }, [contextUser, isEditingBio]);
+  }, [contextUser, isSyncing, isEditingBio]);
 
   // Carousel Auto-play
   useEffect(() => {
@@ -114,31 +142,43 @@ export const ProfilePage: React.FC = () => {
       const files = e.target.files;
       if (files && files.length > 0) {
           setUploadingCover(true);
-          // Defensive copy
-          const newCovers = [...(user.coverImages || [])];
+          
+          // Use the current state's coverImages, ensuring it's an array
+          const currentCovers = user.coverImages || [];
+          const newCovers = [...currentCovers];
           
           try {
+              let addedCount = 0;
               for (let i = 0; i < files.length; i++) {
-                  if (newCovers.length >= 3) break;
+                  if (newCovers.length >= 3) break; // Max 3 limit
+                  
                   // Use HD compression settings
                   const base64 = await compressImage(files[i], 1920, 0.8);
                   newCovers.push(base64);
+                  addedCount++;
               }
               
+              if (addedCount === 0 && currentCovers.length >= 3) {
+                  setError('最多只能上传3张壁纸，请先删除旧的。');
+                  setUploadingCover(false);
+                  return;
+              }
+
               const updatedUser = { ...user, coverImages: newCovers };
               setUser(updatedUser);
-              setCurrentSlide(newCovers.length - 1);
+              setCurrentSlide(newCovers.length - 1); // Switch to newest
 
               // Auto-save immediately for images
               if (contextUser) {
-                  // Ensure we use the FULL user object for saving to prevent data loss
-                  // authService.updateUser -> userService.saveUser handles persistence
+                  // Save directly to UserService (Persistent Store)
+                  userService.saveUser(updatedUser);
+                  
+                  // Update Session Context (Lightweight)
                   authService.updateUser(updatedUser);
                   
-                  // Force a context refresh to update header/sidebar immediately
-                  refreshUser(); 
+                  refreshUser(); // Trigger UI updates
                   
-                  setMessage('高清壁纸上传成功，正在同步云端...');
+                  setMessage(`成功上传 ${addedCount} 张高清壁纸`);
                   setTimeout(() => setMessage(''), 3000);
               }
           } catch (err) {
@@ -146,6 +186,7 @@ export const ProfilePage: React.FC = () => {
               setError('图片处理失败，请重试');
           } finally {
               setUploadingCover(false);
+              if (coverInputRef.current) coverInputRef.current.value = ''; // Reset input
           }
       }
   };
@@ -158,6 +199,7 @@ export const ProfilePage: React.FC = () => {
       
       // Auto-save delete
       if (contextUser) {
+          userService.saveUser(updatedUser);
           authService.updateUser(updatedUser);
           refreshUser();
       }
@@ -221,8 +263,10 @@ export const ProfilePage: React.FC = () => {
 
     try {
         // Persist to D1 via AuthService -> UserService -> CloudService
+        // We use updateUser to handle both session and persistence
+        userService.saveUser(userToSave);
         authService.updateUser(userToSave);
-        // Important: Refresh the global app context so Header/Sidebar update immediately
+        
         refreshUser(); 
 
         setNewPassword('');
@@ -292,13 +336,13 @@ export const ProfilePage: React.FC = () => {
                             className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-full backdrop-blur-md text-xs font-bold flex items-center gap-2 border border-white/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                         >
                             {uploadingCover ? <div className="w-3 h-3 border-2 border-white/50 border-t-white rounded-full animate-spin"/> : <ImageIcon className="h-4 w-4"/>}
-                            {(user.coverImages?.length || 0) >= 3 ? '封面已满 (3/3)' : '上传壁纸 (HD WebP)'}
+                            {(user.coverImages?.length || 0) >= 3 ? '封面已满 (3/3)' : '上传壁纸 (HD)'}
                         </button>
                         <input type="file" ref={coverInputRef} className="hidden" accept="image/*" multiple onChange={handleCoverUpload} />
                         
                         {/* Thumbnails to Delete */}
                         {user.coverImages?.map((img, idx) => (
-                            <div key={idx} className="relative w-10 h-8 rounded-md overflow-hidden border border-white/30 group/thumb cursor-pointer hover:scale-110 transition-transform">
+                            <div key={idx} className="relative w-10 h-8 rounded-md overflow-hidden border border-white/30 group/thumb cursor-pointer hover:scale-110 transition-transform bg-black">
                                 <img src={img} className="w-full h-full object-cover" />
                                 <div onClick={() => removeCover(idx)} className="absolute inset-0 bg-red-500/80 flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity">
                                     <X className="h-3 w-3 text-white" />
