@@ -327,7 +327,8 @@ export const ProfilePage: React.FC = () => {
 
         {/* --- 2. Floating Main Content (Overlapping) --- */}
         <div className="max-w-6xl mx-auto px-4 sm:px-6 relative z-30 -mt-24">
-            <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-xl shadow-indigo-100/50 dark:shadow-none border border-white/50 dark:border-slate-800 overflow-hidden backdrop-blur-sm">
+            {/* Removed overflow-hidden to allow avatar to pop out */}
+            <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-xl shadow-indigo-100/50 dark:shadow-none border border-white/50 dark:border-slate-800 backdrop-blur-sm relative">
                 
                 {/* Header Section */}
                 <div className="relative pt-0 pb-8 px-8 flex flex-col md:flex-row items-center md:items-end gap-6 border-b border-slate-100 dark:border-slate-800">
@@ -386,7 +387,8 @@ export const ProfilePage: React.FC = () => {
                 <div className="flex flex-col md:flex-row min-h-[500px]">
                     
                     {/* Left Sidebar: Socials & Stats */}
-                    <div className="w-full md:w-80 border-r border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 p-8 space-y-8">
+                    {/* Added md:rounded-bl-[2.5rem] to handle bottom left corner since parent overflow is no longer hidden */}
+                    <div className="w-full md:w-80 border-r border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 p-8 space-y-8 md:rounded-bl-[2.5rem]">
                         {/* Socials */}
                         <div>
                             <h4 className="text-xs font-black uppercase text-slate-400 tracking-widest mb-4">社交矩阵</h4>
