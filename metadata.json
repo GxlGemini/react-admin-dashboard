@@ -1,0 +1,5 @@
+{
+  "name": "React Admin Dashboard",
+  "description": "A comprehensive, pure frontend admin dashboard built with React, TypeScript, and Tailwind CSS. Features include authentication, user management, data visualization, weather monitoring, and GenAI integration.",
+  "requestFramePermissions": []
+}
