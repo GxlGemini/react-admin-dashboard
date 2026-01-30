@@ -53,7 +53,7 @@ const CHINA_CITIES: Record<string, { coords: number[]; type: 'hub' | 'node' | 'e
   '延吉': { coords: [129.513228, 42.904823], type: 'edge' }
 };
 
-const HUBS = ['北京', '上海', '深圳', '成都', '武汉', '广州'];
+const HUBS = ['北京', '上海', '喀什', '成都', '呼和浩特', '海口','哈尔滨'];
 
 export const MapPage: React.FC = () => {
   const chartRef = useRef<HTMLDivElement>(null);
