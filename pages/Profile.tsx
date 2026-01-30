@@ -48,40 +48,51 @@ export const ProfilePage: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
-  // --- Critical Fix for Data Loading ---
-  // The contextUser from authService is lightweight (stripped images).
+  // --- Critical Fix for Data Loading & Sync ---
   // We MUST fetch the full user profile from userService to get the images.
+  // FIX: We preserve 'prev' state for editable fields (socials, bio, tags) to prevent 
+  // overwriting user input during background syncs or polling.
   useEffect(() => {
     if (contextUser) {
         // 1. Fetch full data from local storage (source of truth for heavy data)
         const fullUser = userService.getUserById(contextUser.id);
         
-        // 2. Merge with context (for latest session status) but prioritize fullUser for data fields
         if (fullUser) {
             setUser(prev => {
-                // If we are editing bio, don't overwrite it, but do update images/points
-                if (isEditingBio && prev) {
+                // A. Initial Load or User Switch: Load everything fresh from DB
+                if (!prev || prev.id !== contextUser.id) {
                     return {
-                        ...prev,
-                        points: contextUser.points, // Keep points synced
-                        coverImages: fullUser.coverImages || [], // Ensure images are present
+                        ...fullUser,
+                        ...contextUser, // Context has latest session token/points
+                        coverImages: fullUser.coverImages || [],
+                        socials: fullUser.socials || {},
+                        tags: fullUser.tags || [],
+                        bio: fullUser.bio || ''
                     };
                 }
+
+                // B. Incremental Update (Background Sync/Polling)
+                // We MUST preserve local form state (prev) for editable fields
+                // while still allowing live updates for system fields (points, rank).
                 return {
-                    ...fullUser,
-                    ...contextUser, // Context might have newer token-related fields
-                    coverImages: fullUser.coverImages || [], // Explicitly take images from fullUser
-                    bio: fullUser.bio, 
-                    tags: fullUser.tags,
-                    socials: fullUser.socials
+                    ...prev, // Keep user's unsaved edits (Socials, Bio, Tags, etc.)
+                    
+                    // Live System Fields - Safe to update
+                    points: contextUser.points, 
+                    role: contextUser.role,
+                    status: contextUser.status,
+                    lastCheckIn: fullUser.lastCheckIn, 
+                    
+                    // Images: Only sync if local is empty (delayed load), otherwise trust local state to avoid flicker
+                    coverImages: (prev.coverImages && prev.coverImages.length > 0) ? prev.coverImages : (fullUser.coverImages || [])
                 };
             });
         } else {
-            // Fallback if not found in user list (rare)
+            // Fallback
             setUser({ ...contextUser, coverImages: [] });
         }
     }
-  }, [contextUser, isSyncing, isEditingBio]);
+  }, [contextUser, isSyncing]);
 
   // Carousel Auto-play Logic
   useEffect(() => {
