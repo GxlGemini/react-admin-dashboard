@@ -1,19 +1,64 @@
 
 import React from 'react';
 import { useMusic } from '../contexts/MusicContext';
-import { Play, Pause, SkipForward, SkipBack, Volume2, Disc, Music } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, Volume2, Music, AlertCircle, FileAudio, FolderOpen, X } from 'lucide-react';
 
 export const MusicPlayer: React.FC = () => {
-    const { currentTrack, isPlaying, togglePlay, nextTrack, prevTrack, progress, duration, currentTime, seek, volume, setVolume, playlist, playTrack } = useMusic();
+    const { 
+        currentTrack, isPlaying, togglePlay, nextTrack, prevTrack, 
+        progress, duration, currentTime, seek, volume, setVolume, 
+        playlist, playTrack, error, dismissError
+    } = useMusic();
 
     const formatTime = (seconds: number) => {
+        if (!seconds || isNaN(seconds)) return "0:00";
         const mins = Math.floor(seconds / 60);
         const secs = Math.floor(seconds % 60);
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
     return (
-        <div className="h-full flex flex-col lg:flex-row gap-8 animate-fade-in pb-16">
+        <div className="h-full flex flex-col lg:flex-row gap-8 animate-fade-in pb-16 relative">
+            
+            {/* --- Fresh & Aesthetic Error Modal --- */}
+            {error && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl max-w-sm w-full p-6 relative overflow-hidden border border-white/50 dark:border-slate-700 transform transition-all scale-100 animate-bounce-in">
+                        {/* Decorative Background */}
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-red-100 dark:bg-red-900/20 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
+                        <div className="absolute bottom-0 left-0 w-24 h-24 bg-orange-100 dark:bg-orange-900/20 rounded-full blur-3xl -ml-12 -mb-12 pointer-events-none"></div>
+
+                        <div className="relative z-10 flex flex-col items-center text-center">
+                            <div className="w-16 h-16 bg-red-50 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-4 shadow-inner">
+                                <FileAudio className="w-8 h-8 text-red-500" />
+                            </div>
+                            
+                            <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">
+                                哎呀，无法播放
+                            </h3>
+                            
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 leading-relaxed px-2">
+                                系统找不到音频文件 
+                                <br/>
+                                <span className="font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded text-xs mx-1 inline-block mt-1 mb-1">
+                                    {currentTrack?.src}
+                                </span>
+                                <br/>
+                                请将 MP3 文件手动上传至服务器的 
+                                <span className="text-indigo-500 font-mono ml-1">public/music/</span> 目录。
+                            </p>
+
+                            <button 
+                                onClick={dismissError}
+                                className="w-full bg-slate-900 hover:bg-black dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200 text-white rounded-xl py-3 font-bold text-sm transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:scale-95 flex items-center justify-center gap-2"
+                            >
+                                <span className="text-lg">👌</span> 我知道了
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Left: CD Player Visual */}
             <div className="flex-1 flex flex-col items-center justify-center bg-white dark:bg-slate-800 rounded-3xl p-8 shadow-xl border border-gray-100 dark:border-slate-700 relative overflow-hidden">
                 {/* Background Blur */}
@@ -48,7 +93,7 @@ export const MusicPlayer: React.FC = () => {
                              
                              {/* Cover Art Label */}
                              <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-gray-800 relative z-10">
-                                 <img src={currentTrack?.cover} alt="album art" className="w-full h-full object-cover" />
+                                 <img src={currentTrack?.cover || 'https://via.placeholder.com/300'} alt="album art" className="w-full h-full object-cover" />
                              </div>
                          </div>
                     </div>
@@ -97,12 +142,14 @@ export const MusicPlayer: React.FC = () => {
 
             {/* Right: Playlist */}
             <div className="w-full lg:w-96 bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-xl border border-gray-100 dark:border-slate-700 flex flex-col">
-                <div className="flex items-center gap-3 mb-6">
-                    <div className="p-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg">
-                        <Music className="w-5 h-5" />
+                <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg">
+                            <Music className="w-5 h-5" />
+                        </div>
+                        <h3 className="font-bold text-gray-900 dark:text-white">播放列表</h3>
                     </div>
-                    <h3 className="font-bold text-gray-900 dark:text-white">播放列表</h3>
-                    <span className="text-xs bg-gray-100 dark:bg-slate-700 px-2 py-0.5 rounded-full ml-auto text-gray-500">{playlist.length} 首</span>
+                    {/* Import button removed per request */}
                 </div>
 
                 <div className="flex-1 overflow-y-auto space-y-2 custom-scrollbar pr-2">
@@ -113,7 +160,7 @@ export const MusicPlayer: React.FC = () => {
                                 key={track.id} 
                                 onClick={() => playTrack(track)}
                                 className={`
-                                    flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all
+                                    group relative flex items-center gap-3 p-3 rounded-xl transition-all cursor-pointer
                                     ${active 
                                         ? 'bg-[var(--color-primary)] text-white shadow-md' 
                                         : 'hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300'
@@ -121,13 +168,14 @@ export const MusicPlayer: React.FC = () => {
                                 `}
                             >
                                 <span className={`text-xs w-4 ${active ? 'text-white/70' : 'text-gray-400'}`}>{idx + 1}</span>
-                                <img src={track.cover} className="w-10 h-10 rounded-md object-cover" />
+                                <img src={track.cover} className="w-10 h-10 rounded-md object-cover bg-gray-200" />
                                 <div className="flex-1 min-w-0">
                                     <h4 className="font-bold text-sm truncate">{track.title}</h4>
                                     <p className={`text-xs truncate ${active ? 'text-white/70' : 'text-gray-500'}`}>{track.artist}</p>
                                 </div>
+                                
                                 {active && isPlaying && (
-                                    <div className="flex gap-0.5 items-end h-3">
+                                    <div className="flex gap-0.5 items-end h-3 mr-2">
                                         <div className="w-1 bg-white animate-[music-bar_0.6s_ease-in-out_infinite] h-2"></div>
                                         <div className="w-1 bg-white animate-[music-bar_0.8s_ease-in-out_infinite] h-3"></div>
                                         <div className="w-1 bg-white animate-[music-bar_0.5s_ease-in-out_infinite] h-1.5"></div>

@@ -1,8 +1,9 @@
+
 import React, { createContext, useContext, useState, useRef, useEffect } from 'react';
 import { Track } from '../types';
 
-// --- LOCAL PLAYLIST ---
-// NOTE: Please upload these files to your 'public/music/' folder
+// --- STATIC CONFIGURATION ---
+// User must manually upload files to public/music/ folder matching these paths.
 const DEFAULT_PLAYLIST: Track[] = [
   { 
     id: '1', 
@@ -35,12 +36,14 @@ interface MusicContextType {
   duration: number; // seconds
   currentTime: number; // seconds
   volume: number; // 0-1
+  error: string | null; // For UI alerts
   togglePlay: () => void;
   playTrack: (track: Track) => void;
   nextTrack: () => void;
   prevTrack: () => void;
   seek: (time: number) => void;
   setVolume: (vol: number) => void;
+  dismissError: () => void;
   audioRef: React.RefObject<HTMLAudioElement>;
 }
 
@@ -49,11 +52,12 @@ const MusicContext = createContext<MusicContextType | undefined>(undefined);
 export const MusicProvider = ({ children }: { children?: React.ReactNode }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTrack, setCurrentTrack] = useState<Track | null>(DEFAULT_PLAYLIST[0]);
-  const [playlist] = useState<Track[]>(DEFAULT_PLAYLIST);
+  const [playlist] = useState<Track[]>(DEFAULT_PLAYLIST); // Static playlist
   const [progress, setProgress] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolumeState] = useState(0.5);
+  const [error, setError] = useState<string | null>(null);
   
   const audioRef = useRef<HTMLAudioElement>(null);
 
@@ -73,7 +77,6 @@ export const MusicProvider = ({ children }: { children?: React.ReactNode }) => {
       if (playPromise !== undefined) {
         playPromise.catch(e => {
             console.warn("Autoplay prevented or load failed:", e);
-            // Don't alert here, let the onError handler catch the actual loading error
             setIsPlaying(false);
         });
       }
@@ -86,20 +89,20 @@ export const MusicProvider = ({ children }: { children?: React.ReactNode }) => {
         togglePlay();
         return;
     }
+    setError(null); // Clear previous errors
     setCurrentTrack(track);
     setIsPlaying(true);
-    // Audio element update is handled by the useEffect watching currentTrack
   };
 
   const nextTrack = () => {
-    if (!currentTrack) return;
+    if (!currentTrack || playlist.length === 0) return;
     const idx = playlist.findIndex(t => t.id === currentTrack.id);
     const nextIdx = (idx + 1) % playlist.length;
     playTrack(playlist[nextIdx]);
   };
 
   const prevTrack = () => {
-    if (!currentTrack) return;
+    if (!currentTrack || playlist.length === 0) return;
     const idx = playlist.findIndex(t => t.id === currentTrack.id);
     const prevIdx = (idx - 1 + playlist.length) % playlist.length;
     playTrack(playlist[prevIdx]);
@@ -117,6 +120,10 @@ export const MusicProvider = ({ children }: { children?: React.ReactNode }) => {
       if (audioRef.current) audioRef.current.volume = vol;
   };
 
+  const dismissError = () => {
+      setError(null);
+  };
+
   // Handle Track Change
   useEffect(() => {
     if (audioRef.current && currentTrack) {
@@ -125,21 +132,21 @@ export const MusicProvider = ({ children }: { children?: React.ReactNode }) => {
             const playPromise = audioRef.current.play();
             if (playPromise !== undefined) {
                 playPromise.catch(e => {
-                    console.error("Playback start error", e);
+                    // This catch usually handles autoplay policy, not 404s directly
                     setIsPlaying(false);
                 });
             }
         }
     }
-  }, [currentTrack]); // Only re-run if track object changes
+  }, [currentTrack]); 
 
-  // Handle Playback Errors (Missing File)
+  // Handle Actual Playback Errors (e.g., 404 Not Found)
   const handleAudioError = () => {
       if (audioRef.current?.error) {
           setIsPlaying(false);
-          const src = currentTrack?.src || 'unknown';
-          // User requested a simple popup
-          alert(`播放失败: 找不到文件 "${currentTrack?.title}"\n\n请确保已将 MP3 文件上传到 public${src}`);
+          const fileName = currentTrack?.src.split('/').pop() || 'file';
+          // Set user-friendly error message
+          setError(`播放失败：找不到音频文件 "${currentTrack?.title}"`);
       }
   };
 
@@ -169,7 +176,6 @@ export const MusicProvider = ({ children }: { children?: React.ReactNode }) => {
     audio.addEventListener('ended', handleEnded);
     audio.addEventListener('pause', handlePause);
     audio.addEventListener('play', handlePlay);
-    // Error event is handled by React prop on audio tag for simplicity
 
     return () => {
       audio.removeEventListener('timeupdate', updateTime);
@@ -178,12 +184,12 @@ export const MusicProvider = ({ children }: { children?: React.ReactNode }) => {
       audio.removeEventListener('pause', handlePause);
       audio.removeEventListener('play', handlePlay);
     };
-  }, [currentTrack, playlist]); // Dependencies for nextTrack closure
+  }, [currentTrack, playlist]); 
 
   return (
     <MusicContext.Provider value={{ 
-        isPlaying, currentTrack, playlist, progress, duration, currentTime, volume,
-        togglePlay, playTrack, nextTrack, prevTrack, seek, setVolume, audioRef 
+        isPlaying, currentTrack, playlist, progress, duration, currentTime, volume, error,
+        togglePlay, playTrack, nextTrack, prevTrack, seek, setVolume, dismissError, audioRef 
     }}>
       {children}
       {/* Hidden Global Audio Element */}
