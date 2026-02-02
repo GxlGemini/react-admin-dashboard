@@ -90,14 +90,29 @@ export const UsersPage: React.FC = () => {
   const handleOpenModal = (user?: User) => {
     setShowPassword(false); // Reset password view state
     setIsProcessingImg(false);
+    
     if (user) {
       setEditingUser(user);
-      // Clone user data but DO NOT pre-fill password for security and UX
+      // Clone user data but DO NOT pre-fill password.
+      // Explicitly set empty string to prevent uncontrolled input warning
       const { password, ...rest } = user;
-      setFormData({ ...rest }); 
+      setFormData({ 
+          ...rest,
+          password: '' // Clear password field for editing
+      }); 
     } else {
       setEditingUser(null);
-      setFormData({ status: 'active', role: 'user', points: 0 });
+      // Initialize empty form for new user
+      setFormData({ 
+          username: '',
+          nickname: '',
+          email: '',
+          password: '',
+          status: 'active', 
+          role: 'user', 
+          points: 0,
+          avatar: ''
+      });
     }
     setIsModalOpen(true);
   };
@@ -155,33 +170,49 @@ export const UsersPage: React.FC = () => {
     e.preventDefault();
     if (!formData.username) return;
 
+    // --- Validation Logic ---
+    const pass = formData.password ? formData.password.trim() : '';
+
+    if (!editingUser) {
+        // New User: Password is mandatory and length >= 6
+        if (!pass || pass.length < 6) {
+            alert("新建用户时，密码不能为空且长度至少需 6 位。");
+            return;
+        }
+    } else {
+        // Edit User: If password field has content, verify length
+        if (pass && pass.length < 6) {
+            alert("修改密码时，新密码长度至少需 6 位。");
+            return;
+        }
+    }
+
     // Safety check for Super Admin
     const isSuperAdmin = editingUser?.username === 'admin';
     const finalRole = isSuperAdmin ? 'admin' : (formData.role as 'admin' | 'user');
     const finalStatus = isSuperAdmin ? 'active' : (formData.status as 'active' | 'inactive');
 
     // Fetch the latest version of the user from storage to ensure we don't overwrite Profile fields (bio, tags, etc.)
-    // that might not be in the current 'editingUser' state if the list was stale.
     const latestUser = editingUser ? userService.getUserById(editingUser.id) : null;
     const baseUser = latestUser || editingUser || {};
 
     const userToSave: User = {
-      // FIX: Generate a temporary ID for new users so validation passes
       id: editingUser ? editingUser.id : Date.now().toString(),
       username: formData.username,
       email: formData.email || '', 
       status: finalStatus,
       role: finalRole,
       createdAt: editingUser ? editingUser.createdAt : new Date().toISOString().split('T')[0],
-      // Only update password if formData.password is provided, otherwise keep existing
-      password: formData.password || (editingUser ? editingUser.password : '123456'), 
+      
+      // Password Logic: Use new password if provided, else fall back to existing (for edit)
+      password: pass || (editingUser ? editingUser.password : ''), 
+      
       nickname: formData.nickname || formData.username,
       avatar: formData.avatar || editingUser?.avatar,
       points: Number(formData.points) || 0,
       lastCheckIn: editingUser?.lastCheckIn,
       
-      // CRITICAL FIX: Merge Profile 2.0 fields from the LATEST user record found in storage
-      // The form does not include these fields, so we must preserve them from the source.
+      // Merge Profile 2.0 fields
       coverImages: (baseUser as User).coverImages || [],
       bio: (baseUser as User).bio || '',
       tags: (baseUser as User).tags || [],
@@ -194,7 +225,6 @@ export const UsersPage: React.FC = () => {
 
         // 2. CRITICAL: If we are editing the currently logged-in user, 
         // we MUST update the session storage and global context immediately.
-        // This ensures Profile page and Header see the changes without logout.
         if (currentUser && currentUser.id === userToSave.id) {
             authService.updateUser(userToSave);
             refreshUser();
@@ -445,7 +475,11 @@ export const UsersPage: React.FC = () => {
               </button>
             </div>
             
-            <form onSubmit={handleSubmit} className="p-6 space-y-5">
+            <form onSubmit={handleSubmit} className="p-6 space-y-5" autoComplete="off">
+              {/* Disable Chrome Autofill Hack */}
+              <input type="text" style={{display: 'none'}} />
+              <input type="password" style={{display: 'none'}} />
+
               {/* Avatar Upload Section */}
               <div className="flex justify-center mb-6">
                 <div className="relative group cursor-pointer" onClick={() => !isProcessingImg && fileInputRef.current?.click()}>
@@ -485,6 +519,7 @@ export const UsersPage: React.FC = () => {
                     className="w-full rounded-lg border border-gray-300 p-2.5 focus:border-[var(--color-primary)] focus:ring-[var(--color-primary)] dark:bg-slate-700 dark:border-slate-600 dark:text-white transition-all text-sm"
                     required
                     disabled={!!editingUser}
+                    autoComplete="off"
                   />
                 </div>
                 <div>
@@ -494,17 +529,19 @@ export const UsersPage: React.FC = () => {
                     value={formData.nickname || ''}
                     onChange={(e) => setFormData({ ...formData, nickname: e.target.value })}
                     className="w-full rounded-lg border border-gray-300 p-2.5 focus:border-[var(--color-primary)] focus:ring-[var(--color-primary)] dark:bg-slate-700 dark:border-slate-600 dark:text-white transition-all text-sm"
+                    autoComplete="off"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">Email</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">Email (选填)</label>
                 <input
                   type="email"
                   value={formData.email || ''}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   className="w-full rounded-lg border border-gray-300 p-2.5 focus:border-[var(--color-primary)] focus:ring-[var(--color-primary)] dark:bg-slate-700 dark:border-slate-600 dark:text-white transition-all text-sm"
+                  autoComplete="off"
                 />
               </div>
 
@@ -519,7 +556,7 @@ export const UsersPage: React.FC = () => {
                   />
               </div>
 
-              {/* Password Field - Optional when editing */}
+              {/* Password Field */}
               <div>
                   <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">
                       {editingUser ? '重置密码 (留空则不修改)' : t('password')}
@@ -530,8 +567,8 @@ export const UsersPage: React.FC = () => {
                         value={formData.password || ''}
                         onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                         className="w-full rounded-lg border border-gray-300 p-2.5 focus:border-[var(--color-primary)] focus:ring-[var(--color-primary)] dark:bg-slate-700 dark:border-slate-600 dark:text-white transition-all text-sm"
-                        placeholder={editingUser ? "******" : "Required"}
-                        required={!editingUser}
+                        placeholder={editingUser ? "若不修改请留空" : "请输入密码 (至少6位)"}
+                        autoComplete="new-password"
                       />
                       <button 
                         type="button"
