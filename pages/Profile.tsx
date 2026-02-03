@@ -49,9 +49,6 @@ export const ProfilePage: React.FC = () => {
   const coverInputRef = useRef<HTMLInputElement>(null);
 
   // --- Critical Fix for Data Loading & Sync ---
-  // We MUST fetch the full user profile from userService to get the images.
-  // FIX: We preserve 'prev' state for editable fields (socials, bio, tags) to prevent 
-  // overwriting user input during background syncs or polling.
   useEffect(() => {
     if (contextUser) {
         // 1. Fetch full data from local storage (source of truth for heavy data)
@@ -72,11 +69,8 @@ export const ProfilePage: React.FC = () => {
                 }
 
                 // B. Incremental Update (Background Sync/Polling)
-                // We MUST preserve local form state (prev) for editable fields
-                // while still allowing live updates for system fields (points, rank).
                 return {
-                    ...prev, // Keep user's unsaved edits (Socials, Bio, Tags, etc.)
-                    
+                    ...prev, 
                     // Live System Fields - Safe to update
                     points: contextUser.points, 
                     role: contextUser.role,
@@ -103,7 +97,7 @@ export const ProfilePage: React.FC = () => {
           setCurrentSlide(prev => (prev + 1) % coverCount);
       }, 5000);
       return () => clearInterval(interval);
-  }, [user?.coverImages]); // Depend on the array reference to reset if images change
+  }, [user?.coverImages]); 
 
   if (!user) return (
       <div className="flex h-96 items-center justify-center">
@@ -113,8 +107,8 @@ export const ProfilePage: React.FC = () => {
 
   // --- Handlers ---
 
-  // Optimized for D1 Storage: 1920px HD WebP
-  const compressImage = (file: File, maxWidth = 1920, quality = 0.8): Promise<string> => {
+  // Optimized for D1 Storage: Reduced to 1280px & 0.6 Quality to prevent QuotaExceededError
+  const compressImage = (file: File, maxWidth = 1280, quality = 0.6): Promise<string> => {
     return new Promise((resolve) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
@@ -143,8 +137,8 @@ export const ProfilePage: React.FC = () => {
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Avatars can be smaller, 400px is enough
-      const base64 = await compressImage(file, 400, 0.8);
+      // Avatars can be smaller, 300px is enough
+      const base64 = await compressImage(file, 300, 0.7);
       setUser({ ...user, avatar: base64 });
     }
   };
@@ -161,7 +155,7 @@ export const ProfilePage: React.FC = () => {
               let addedCount = 0;
               for (let i = 0; i < files.length; i++) {
                   if (newCovers.length >= 3) break; // Max 3 limit
-                  const base64 = await compressImage(files[i], 1920, 0.8);
+                  const base64 = await compressImage(files[i], 1280, 0.6); // Aggressive compression
                   newCovers.push(base64);
                   addedCount++;
               }

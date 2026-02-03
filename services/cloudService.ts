@@ -4,6 +4,7 @@ import { AppNotification, User, ActivityLog, DashboardStat, Photo } from '../typ
 // Centralized Storage Keys
 export const STORAGE_KEYS = {
   USERS: 'admin_dashboard_users_list_v2',
+  USER_COVERS: 'admin_user_covers_map', // Add this key
   ACTIVITY: 'admin_dashboard_activities',
   NOTIFICATIONS: 'admin_dashboard_notifications',
   STATS: 'dashboard_stats',
@@ -11,7 +12,6 @@ export const STORAGE_KEYS = {
   WEATHER: 'admin_weather_data',
   MAP_CONFIG: 'admin_map_config',
   AI_DATA: 'admin_ai_data',
-  // Photos removed from sync keys to use dedicated API
   COUNTDOWN: 'admin_countdown_config'
 };
 
@@ -27,7 +27,6 @@ const API_MAP: Record<string, string> = {
   weather: STORAGE_KEYS.WEATHER,
   mapConfig: STORAGE_KEYS.MAP_CONFIG,
   aiData: STORAGE_KEYS.AI_DATA,
-  // photos: REMOVED
   countdown: STORAGE_KEYS.COUNTDOWN
 };
 
@@ -77,9 +76,7 @@ export const cloudService = {
       // 4. Update Local Storage Safely
       cloudService.applyUpdates(data);
       
-      // 5. Update Local Manifest (Only update timestamps for keys we fetched)
-      // Note: With D1, the backend returns a generic manifest. We should ideally merge it carefully.
-      // For now, simple timestamp update works.
+      // 5. Update Local Manifest
       const newManifest = { ...localManifest };
       keysToFetch.forEach(k => {
           newManifest[k] = remoteManifest[k] || Date.now();
@@ -93,24 +90,54 @@ export const cloudService = {
     }
   },
 
-  /**
-   * Smart Poll: Check manifest, then trigger pull if needed
-   */
   poll: async (): Promise<boolean> => {
       return await cloudService.pull();
   },
 
   /**
-   * Helper to write data to localStorage with Quota Handling
+   * Helper to write data to localStorage with Quota Handling and Split Logic
    */
   applyUpdates: (data: GlobalState) => {
       Object.keys(API_MAP).forEach(apiKey => {
           if (data[apiKey] !== undefined) {
+              const storageKey = API_MAP[apiKey];
+              const value = data[apiKey];
+
+              // SPECIAL HANDLING FOR USERS: Split images
+              if (apiKey === 'users' && Array.isArray(value)) {
+                  const lightUsers = value.map((u: any) => {
+                      const { coverImages, ...rest } = u;
+                      return { ...rest, coverImages: [] };
+                  });
+                  
+                  const coversMap: Record<string, string[]> = {};
+                  value.forEach((u: any) => {
+                      if (u.coverImages && u.coverImages.length > 0) {
+                          coversMap[u.id] = u.coverImages;
+                      }
+                  });
+
+                  try {
+                      // Save Main List
+                      localStorage.setItem(storageKey, JSON.stringify(lightUsers));
+                      // Save Covers Separately
+                      try {
+                          localStorage.setItem(STORAGE_KEYS.USER_COVERS, JSON.stringify(coversMap));
+                      } catch (coverErr) {
+                          console.error("Local storage full for covers during sync.");
+                      }
+                  } catch (e) {
+                      console.error(`Failed to save users list. Storage full?`);
+                  }
+                  return; // Done for users
+              }
+
+              // Normal handling for other keys
               try {
-                localStorage.setItem(API_MAP[apiKey], JSON.stringify(data[apiKey]));
+                localStorage.setItem(storageKey, JSON.stringify(value));
               } catch (e) {
                 console.error(`Failed to save ${apiKey} to local storage. Storage full?`);
-                if (apiKey === 'activities') return;
+                // If activities fail, maybe clear old ones, but for now just warn
               }
           }
       });
@@ -118,8 +145,6 @@ export const cloudService = {
 
   /**
    * Smart Push: Only upload changed keys
-   * @param keys - Array of keys to sync (e.g. ['users', 'activities'])
-   * @param dataOverride - Optional object to provide data directly instead of reading from localStorage
    */
   push: async (keys?: ApiKey[], dataOverride?: GlobalState) => {
     try {
@@ -133,9 +158,23 @@ export const cloudService = {
               payload[key] = dataOverride[key];
           } else {
               // Fallback to reading from localStorage
-              const storageKey = API_MAP[key];
-              const item = localStorage.getItem(storageKey);
-              payload[key] = item ? JSON.parse(item) : null;
+              if (key === 'users') {
+                  // Special Re-assembly for Users
+                  const storedUsers = localStorage.getItem(STORAGE_KEYS.USERS);
+                  const storedCovers = localStorage.getItem(STORAGE_KEYS.USER_COVERS);
+                  if (storedUsers) {
+                      const users = JSON.parse(storedUsers);
+                      const covers = storedCovers ? JSON.parse(storedCovers) : {};
+                      payload[key] = users.map((u: any) => ({
+                          ...u,
+                          coverImages: covers[u.id] || []
+                      }));
+                  }
+              } else {
+                  const storageKey = API_MAP[key];
+                  const item = localStorage.getItem(storageKey);
+                  payload[key] = item ? JSON.parse(item) : null;
+              }
           }
       });
 
@@ -146,8 +185,6 @@ export const cloudService = {
         body: JSON.stringify(payload)
       }).then(async (res) => {
           if (res.ok) {
-             // On success, we update our local manifest to "now" so we don't immediately re-download
-             // assuming the server is consistent.
              const localManifest = JSON.parse(localStorage.getItem(SYNC_META_KEY) || '{}');
              targets.forEach(t => localManifest[t] = Date.now());
              localStorage.setItem(SYNC_META_KEY, JSON.stringify(localManifest));
