@@ -4,7 +4,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { authService } from '../services/authService';
 import { notificationService } from '../services/notificationService';
-import { Menu, Bell, Moon, Sun, Languages, Palette, Check, Info, CheckCircle, AlertTriangle, LogOut } from 'lucide-react';
+import { Menu, Bell, Moon, Sun, Languages, Palette, Check, Info, CheckCircle, AlertTriangle, LogOut, Github } from 'lucide-react';
 import { RoutePath, AppNotification } from '../types';
 import { useApp } from '../contexts/AppContext';
 import { GlobalPlayerWidget } from './GlobalPlayerWidget';
@@ -47,6 +47,7 @@ export const Layout = () => {
       case RoutePath.GOLDEN_FLOWER: return '大夏·炸金花';
       case RoutePath.DASHBOARD: return t('dashboard');
       case RoutePath.USERS: return t('userManagement');
+      case RoutePath.LOGIN_HISTORY: return '登录审计';
       case RoutePath.MAP: return t('maps');
       case RoutePath.WEATHER: return t('weather');
       case RoutePath.PROFILE: return t('profile');
@@ -113,6 +114,17 @@ export const Layout = () => {
 
           <div className="flex items-center space-x-3 sm:space-x-4">
             
+            {/* GitHub Link */}
+            <a 
+              href="https://github.com/GxlGemini/react-admin-dashboard"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-full p-2 text-gray-500 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700 transition-colors"
+              title="GitHub Source Code"
+            >
+              <Github className="h-5 w-5" />
+            </a>
+
             {/* Language Switch */}
             <button 
               onClick={() => setLanguage(language === 'en' ? 'zh' : 'en')}
