@@ -237,10 +237,6 @@ export const ProfilePage: React.FC = () => {
     setError('');
     setMessage('');
 
-    // 新增调试日志
-    console.log('保存前的封面数据:', user.coverImages?.length);
-    console.log('LocalStorage 当前占用:', JSON.stringify(localStorage).length / 1024 / 1024, 'MB');
-
     if (activeTab === 'security') {
         if (newPassword && newPassword.length < 6) {
             setError('密码长度至少需要6位');
@@ -272,15 +268,7 @@ export const ProfilePage: React.FC = () => {
         setIsEditingBio(false);
         setMessage(t('success') + '!');
         setTimeout(() => setMessage(''), 3000);
-
-        // 验证保存结果
-        const savedUser = userService.getUserById(contextUser.id);
-        console.log('保存后的封面数据:', savedUser?.coverImages?.length);
-        
-        authService.updateUser(userToSave);
-        refreshUser();
     } catch (e) {
-        console.error('保存失败详情:', e); // 捕获具体错误
         setError('保存失败');
     } finally {
         setSaving(false);
