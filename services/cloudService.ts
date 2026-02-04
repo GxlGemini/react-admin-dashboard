@@ -110,8 +110,17 @@ export const cloudService = {
                       return { ...rest, coverImages: [] };
                   });
                   
-                  const coversMap: Record<string, string[]> = {};
+                  // Load existing covers map first
+                  let coversMap: Record<string, string[]> = {};
+                  try {
+                      coversMap = JSON.parse(localStorage.getItem(STORAGE_KEYS.USER_COVERS) || '{}');
+                  } catch(e) {}
+
+                  // Update map intelligently
                   value.forEach((u: any) => {
+                      // Only update covers if incoming is valid and not empty
+                      // OR if local doesn't exist.
+                      // This protects local cache from being wiped by partial syncs.
                       if (u.coverImages && u.coverImages.length > 0) {
                           coversMap[u.id] = u.coverImages;
                       }

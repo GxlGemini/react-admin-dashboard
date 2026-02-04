@@ -6,7 +6,7 @@ import { UserProfile } from '../types';
 import { 
     Camera, Save, Lock, AlertCircle, Eye, EyeOff, Plus, X, 
     Image as ImageIcon, Hash, Github, Twitter, Globe, Edit2, Check, Layout, 
-    Upload, Trash2, Instagram, ExternalLink, Sliders, ChevronLeft, ChevronRight, Loader2, Mail, Calendar, MapPin
+    Upload, Trash2, Instagram, ExternalLink, Link as LinkIcon, Loader2, Mail, Calendar
 } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 
@@ -42,6 +42,7 @@ export const ProfilePage: React.FC = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isEditingBio, setIsEditingBio] = useState(false);
   const [newTag, setNewTag] = useState('');
+  const [imageUrl, setImageUrl] = useState(''); // New State for URL Input
   const [uploadingCover, setUploadingCover] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -61,7 +62,7 @@ export const ProfilePage: React.FC = () => {
                     return {
                         ...fullUser,
                         ...contextUser, // Context has latest session token/points
-                        coverImages: fullUser.coverImages || [],
+                        coverImages: (fullUser.coverImages && fullUser.coverImages.length > 0) ? fullUser.coverImages : [],
                         socials: fullUser.socials || {},
                         tags: fullUser.tags || [],
                         bio: fullUser.bio || ''
@@ -77,8 +78,11 @@ export const ProfilePage: React.FC = () => {
                     status: contextUser.status,
                     lastCheckIn: fullUser.lastCheckIn, 
                     
-                    // Images: Only sync if local is empty (delayed load), otherwise trust local state to avoid flicker
-                    coverImages: (prev.coverImages && prev.coverImages.length > 0) ? prev.coverImages : (fullUser.coverImages || [])
+                    // Images: PROTECT EXISTING IMAGES. Only update if local is empty/different and incoming is valid.
+                    // This prevents empty arrays from sync overwriting valid local data.
+                    coverImages: (prev.coverImages && prev.coverImages.length > 0) 
+                        ? prev.coverImages 
+                        : (fullUser.coverImages || [])
                 };
             });
         } else {
@@ -107,8 +111,8 @@ export const ProfilePage: React.FC = () => {
 
   // --- Handlers ---
 
-  // Optimized for D1 Storage: Reduced to 1280px & 0.6 Quality to prevent QuotaExceededError
-  const compressImage = (file: File, maxWidth = 1280, quality = 0.6): Promise<string> => {
+  // Standard Avatar Compression (Keep this for Avatar only)
+  const compressImage = (file: File, maxWidth = 300, quality = 0.7): Promise<string> => {
     return new Promise((resolve) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
@@ -127,7 +131,6 @@ export const ProfilePage: React.FC = () => {
                 }
                 const ctx = canvas.getContext('2d');
                 ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-                // Convert to WebP for maximum efficiency
                 resolve(canvas.toDataURL('image/webp', quality));
             };
         };
@@ -137,48 +140,57 @@ export const ProfilePage: React.FC = () => {
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Avatars can be smaller, 300px is enough
       const base64 = await compressImage(file, 300, 0.7);
       setUser({ ...user, avatar: base64 });
     }
+  };
+
+  // --- New Cover Handling Logic ---
+
+  const handleAddCoverUrl = () => {
+      if (!imageUrl.trim()) return;
+      if (!imageUrl.startsWith('http')) {
+          setError('请输入有效的图片网址 (http/https)');
+          return;
+      }
+
+      const currentCovers = user.coverImages || [];
+      if (currentCovers.length >= 3) {
+          setError('封面已满 (3/3)，请先删除旧图片');
+          return;
+      }
+
+      const newCovers = [...currentCovers, imageUrl.trim()];
+      updateUserCovers(newCovers);
+      setImageUrl('');
+      setMessage('图片链接添加成功');
+      setTimeout(() => setMessage(''), 3000);
   };
 
   const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
       if (files && files.length > 0) {
           setUploadingCover(true);
-          
           const currentCovers = user.coverImages || [];
           const newCovers = [...currentCovers];
           
           try {
               let addedCount = 0;
               for (let i = 0; i < files.length; i++) {
-                  if (newCovers.length >= 3) break; // Max 3 limit
-                  const base64 = await compressImage(files[i], 1280, 0.6); // Aggressive compression
+                  if (newCovers.length >= 3) break;
+                  // Aggressive compression for LocalStorage compatibility
+                  const base64 = await compressImage(files[i], 1280, 0.5); 
                   newCovers.push(base64);
                   addedCount++;
               }
               
               if (addedCount === 0 && currentCovers.length >= 3) {
                   setError('封面已满 (3/3)，请先删除旧图片');
-                  setUploadingCover(false);
-                  return;
-              }
-
-              const updatedUser = { ...user, coverImages: newCovers };
-              setUser(updatedUser);
-              setCurrentSlide(newCovers.length - 1); 
-
-              if (contextUser) {
-                  userService.saveUser(updatedUser);
-                  authService.updateUser(updatedUser);
-                  refreshUser();
-                  setMessage(`成功上传 ${addedCount} 张壁纸`);
-                  setTimeout(() => setMessage(''), 3000);
+              } else {
+                  updateUserCovers(newCovers);
+                  setMessage(`成功上传 ${addedCount} 张图片 (建议使用外链以节省空间)`);
               }
           } catch (err) {
-              console.error("Cover upload error:", err);
               setError('图片处理失败');
           } finally {
               setUploadingCover(false);
@@ -189,13 +201,15 @@ export const ProfilePage: React.FC = () => {
 
   const removeCover = (index: number) => {
       const newCovers = user.coverImages?.filter((_, i) => i !== index) || [];
+      updateUserCovers(newCovers);
+  };
+
+  const updateUserCovers = (newCovers: string[]) => {
       const updatedUser = { ...user, coverImages: newCovers };
       setUser(updatedUser);
-      // Reset slide if out of bounds
-      if (currentSlide >= newCovers.length) {
-          setCurrentSlide(Math.max(0, newCovers.length - 1));
-      }
+      if (newCovers.length > 0) setCurrentSlide(newCovers.length - 1);
       
+      // Persist immediately to prevent data loss
       if (contextUser) {
           userService.saveUser(updatedUser);
           authService.updateUser(updatedUser);
@@ -250,13 +264,17 @@ export const ProfilePage: React.FC = () => {
         }
     }
 
+    // Ensure we are passing the CURRENT state with images
     const userToSave: UserProfile = { ...user };
+    
+    // Explicit password logic
     if (newPassword) userToSave.password = newPassword;
     else userToSave.password = contextUser.password;
 
-    userToSave.coverImages = userToSave.coverImages || [];
-    userToSave.tags = userToSave.tags || [];
-    userToSave.socials = userToSave.socials || {};
+    // Safety checks for arrays
+    userToSave.coverImages = user.coverImages || [];
+    userToSave.tags = user.tags || [];
+    userToSave.socials = user.socials || {};
 
     try {
         userService.saveUser(userToSave);
@@ -269,7 +287,7 @@ export const ProfilePage: React.FC = () => {
         setMessage(t('success') + '!');
         setTimeout(() => setMessage(''), 3000);
     } catch (e) {
-        setError('保存失败');
+        setError('保存失败: 数据可能过大，请尝试使用图片链接');
     } finally {
         setSaving(false);
     }
@@ -292,26 +310,44 @@ export const ProfilePage: React.FC = () => {
                             className="w-full h-full bg-cover bg-center"
                             style={{ backgroundImage: `url(${img})` }}
                         />
-                        {/* Gradient Overlay for Text Readability if needed */}
                         <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
                     </div>
                 ))
             ) : (
-                // Default Clean Gradient
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-100 to-indigo-100 dark:from-slate-800 dark:to-slate-900 flex items-center justify-center">
                     <ImageIcon className="w-16 h-16 text-slate-300 dark:text-slate-700 opacity-50" />
                 </div>
             )}
 
             {/* Cover Controls (Top Right) */}
-            <div className="absolute top-6 right-6 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+            <div className="absolute top-6 right-6 z-20 flex flex-col items-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                {/* External URL Input */}
+                <div className="flex gap-1 bg-black/40 backdrop-blur-md p-1 rounded-lg border border-white/20">
+                    <input 
+                        type="text" 
+                        value={imageUrl}
+                        onChange={(e) => setImageUrl(e.target.value)}
+                        placeholder="输入图片 URL..."
+                        className="bg-transparent text-white text-xs px-2 py-1 outline-none w-48 placeholder:text-white/50"
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddCoverUrl()}
+                    />
+                    <button 
+                        onClick={handleAddCoverUrl}
+                        disabled={covers.length >= 3}
+                        className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded-md text-xs font-bold transition-colors disabled:opacity-50"
+                    >
+                        <LinkIcon className="w-3 h-3" />
+                    </button>
+                </div>
+
+                {/* Local Upload Fallback */}
                 <button 
                     onClick={() => coverInputRef.current?.click()}
                     disabled={uploadingCover || covers.length >= 3}
-                    className="bg-black/30 hover:bg-black/50 backdrop-blur-md text-white px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2 border border-white/20 transition-all"
+                    className="bg-black/30 hover:bg-black/50 backdrop-blur-md text-white px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2 border border-white/20 transition-all self-end"
                 >
-                    {uploadingCover ? <Loader2 className="w-3 h-3 animate-spin"/> : <ImageIcon className="w-4 h-4"/>}
-                    {covers.length >= 3 ? '已满 (3/3)' : '上传封面'}
+                    {uploadingCover ? <Loader2 className="w-3 h-3 animate-spin"/> : <Upload className="w-3 h-3"/>}
+                    {covers.length >= 3 ? '已满 (3/3)' : '本地上传'}
                 </button>
                 <input type="file" ref={coverInputRef} className="hidden" accept="image/*" multiple onChange={handleCoverUpload} />
             </div>
@@ -332,12 +368,11 @@ export const ProfilePage: React.FC = () => {
 
         {/* --- 2. Floating Main Content (Overlapping) --- */}
         <div className="max-w-6xl mx-auto px-4 sm:px-6 relative z-30 -mt-24">
-            {/* Removed overflow-hidden to allow avatar to pop out */}
             <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-xl shadow-indigo-100/50 dark:shadow-none border border-white/50 dark:border-slate-800 backdrop-blur-sm relative">
                 
                 {/* Header Section */}
                 <div className="relative pt-0 pb-8 px-8 flex flex-col md:flex-row items-center md:items-end gap-6 border-b border-slate-100 dark:border-slate-800">
-                    {/* Avatar Container - Pulled Up */}
+                    {/* Avatar Container */}
                     <div className="relative -mt-16 group flex-shrink-0">
                         <div className="w-36 h-36 rounded-full border-[6px] border-white dark:border-slate-900 shadow-lg bg-white overflow-hidden">
                             <img 
@@ -392,7 +427,6 @@ export const ProfilePage: React.FC = () => {
                 <div className="flex flex-col md:flex-row min-h-[500px]">
                     
                     {/* Left Sidebar: Socials & Stats */}
-                    {/* Added md:rounded-bl-[2.5rem] to handle bottom left corner since parent overflow is no longer hidden */}
                     <div className="w-full md:w-80 border-r border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 p-8 space-y-8 md:rounded-bl-[2.5rem]">
                         {/* Socials */}
                         <div>

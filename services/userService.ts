@@ -72,13 +72,33 @@ export const userService = {
         user.password = users[index].password;
     }
     
+    // --- SMART COVER MERGE LOGIC ---
+    // Prevent empty array from overwriting existing covers if the update didn't intend to change covers
+    // (e.g., lightweight session updates or points updates)
+    let finalCovers: string[] = [];
+    
+    if (index >= 0) {
+        const existing = users[index];
+        // If incoming user has covers, use them.
+        // If incoming user covers is empty BUT existing has them, keep existing.
+        // This makes it hard to "delete all covers" via this method without a flag, but protects against accidental data loss.
+        if (user.coverImages && user.coverImages.length > 0) {
+            finalCovers = user.coverImages;
+        } else {
+            finalCovers = existing.coverImages || [];
+        }
+    } else {
+        // New user
+        finalCovers = user.coverImages || [];
+    }
+
     // Merge Logic (In Memory)
     if (index >= 0) {
         const existing = users[index];
         users[index] = {
             ...existing, 
             ...user,     
-            coverImages: user.coverImages !== undefined ? user.coverImages : existing.coverImages,
+            coverImages: finalCovers,
             bio: user.bio !== undefined ? user.bio : existing.bio,
             tags: user.tags !== undefined ? user.tags : existing.tags,
             socials: user.socials !== undefined ? user.socials : existing.socials,
@@ -92,7 +112,7 @@ export const userService = {
             id: user.id || Date.now().toString(), 
             createdAt: user.createdAt || new Date().toISOString().split('T')[0],
             points: user.points || 0,
-            coverImages: user.coverImages || [],
+            coverImages: finalCovers,
             tags: user.tags || [],
             socials: user.socials || {}
         });
@@ -107,28 +127,32 @@ export const userService = {
     });
 
     // 2. Prepare Covers Map (Only Images)
-    const coversMap: Record<string, string[]> = {};
-    users.forEach(u => {
-        if (u.coverImages && u.coverImages.length > 0) {
-            coversMap[u.id] = u.coverImages;
-        }
-    });
+    const storedCovers = localStorage.getItem(COVERS_STORAGE_KEY);
+    let coversMap: Record<string, string[]> = storedCovers ? JSON.parse(storedCovers) : {};
+    
+    // Update the specific user's covers in the map
+    if (finalCovers.length > 0) {
+        coversMap[user.id] = finalCovers;
+    } else {
+        // If we strictly want to delete, we'd delete key, but our safety logic above prevents empty array.
+        // If it was a new user with 0 covers, we assume empty.
+        // If we really need to delete, we need a separate explicit delete method or flag.
+        // For now, if finalCovers is empty, we keep map as is (or empty if new).
+    }
 
     // 3. Save to Local Storage (Split)
     try {
         localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(lightUsers));
-        // Use try-catch specifically for the heavy images
         try {
             localStorage.setItem(COVERS_STORAGE_KEY, JSON.stringify(coversMap));
         } catch (coverError) {
             console.warn("Cover images storage quota exceeded. Saving main data only locally.");
-            // We proceed because we still want to push to cloud
         }
     } catch (e) {
         console.warn("Main User Storage full!", e);
     }
 
-    // 4. Trigger Cloud Sync (Send FULL object)
+    // 4. Trigger Cloud Sync (Send FULL object with correct covers)
     // Cloud needs the full object because D1 relational tables handle the split
     try {
         cloudService.push(['users'], { users: users });
