@@ -16,7 +16,8 @@ import { GuidePage } from './pages/Guide';
 import { NewYearCountdown } from './pages/NewYearCountdown';
 import { SnippetsPage } from './pages/Snippets';
 import { GoldenFlowerPage } from './pages/GoldenFlower';
-import { RoutePath } from './types';
+import { CodeImplementationPage } from '../pages/CodeImplementation';
+import { RoutePath } from '../types';
 import { AppProvider } from './contexts/AppContext';
 import { MusicProvider } from './contexts/MusicContext';
 import { authService } from './services/authService';
@@ -56,6 +57,7 @@ function App() {
                 <Route path={RoutePath.USERS} element={<UsersPage />} />
                 <Route path={RoutePath.LOGIN_HISTORY} element={<LoginHistoryPage />} />
                 <Route path={RoutePath.SNIPPETS} element={<SnippetsPage />} />
+                <Route path={RoutePath.CODE_IMPL} element={<CodeImplementationPage />} />
                 <Route path={RoutePath.GALLERY} element={<GalleryPage />} />
                 <Route path={RoutePath.MUSIC} element={<MusicPlayer />} />
                 <Route path={RoutePath.WEATHER} element={<WeatherPage />} />

@@ -199,6 +199,77 @@ export const snippetService = {
 \`\`\`
 避免了复杂的 Redux 模板代码，直接利用 localStorage + Hook 完成数据流通。
 `
+  },
+  {
+    id: '3d_globe',
+    title: '3D 交互地球仪',
+    icon: MapIcon,
+    summary: '使用 `react-globe.gl` 与 `three.js` 实现了酷炫的 3D 地球仪，展示了全球核心数据节点的连线与动画效果。',
+    highlights: `
+### 精彩代码：Globe 渲染与数据绑定
+在指南页面中集成了一个非常惊艳的地球仪组件：
+
+\`\`\`tsx
+import Globe from 'react-globe.gl';
+
+export const GlobeVisualization = () => {
+  const [arcsData, setArcsData] = useState([]);
+
+  useEffect(() => {
+    // 构建地点之间的飞线连接数据
+    const data = [
+      { startLat: 39.9, startLng: 116.4, endLat: 37.7, endLng: -122.4, color: '#3b82f6' }
+    ];
+    setArcsData(data);
+  }, []);
+
+  return (
+    <Globe
+      globeImageUrl="//unpkg.com/three-globe/example/img/earth-night.jpg"
+      arcsData={arcsData}
+      arcColor="color"
+      arcDashLength={0.4}
+      arcDashGap={4}
+      arcDashAnimateTime={1000}
+      backgroundColor="rgba(0,0,0,0)"
+    />
+  );
+};
+\`\`\`
+通过传递参数给 \`react-globe.gl\`，实现了动态流光飞线的效果。
+`
+  },
+  {
+    id: 'i18n',
+    title: '多语言国际化',
+    icon: BookOpen,
+    summary: '系统级别支持中文与英文之间的无缝切换。实现方式未使用重量级的 i18next，而是自己实现了一个轻量的基于 Context 的多语言字典引擎。',
+    highlights: `
+### 精彩代码：极简 I18n 引擎
+\`AppContext.tsx\` 结合 \`utils/i18n.ts\` :
+
+\`\`\`tsx
+const translations = {
+  zh: { dashboard: '大盘概览', map: '全国监控' },
+  en: { dashboard: 'Dashboard', map: 'Map View' },
+};
+
+export const AppProvider = ({ children }) => {
+  const [language, setLanguage] = useState('zh');
+  
+  const t = (key: string) => {
+    return translations[language][key] || key;
+  };
+
+  return (
+    <AppContext.Provider value={{ language, setLanguage, t }}>
+      {children}
+    </AppContext.Provider>
+  );
+};
+\`\`\`
+通过自定义 hook \`useApp()\` 配合 \`t('key')\` 在任意组件内获取国际化文本，保持了极高的灵活性与执行效率。
+`
   }
 ];
 

@@ -141,5 +141,6 @@ export enum RoutePath {
   MUSIC = '/music',
   SNIPPETS = '/snippets',
   NEW_YEAR = '/new-year',
-  GOLDEN_FLOWER = '/golden-flower'
+  GOLDEN_FLOWER = '/golden-flower',
+  CODE_IMPL = '/code-impl'
 }
