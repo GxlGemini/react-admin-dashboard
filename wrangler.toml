@@ -7,17 +7,9 @@ compatibility_date = "2024-04-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "admin-db"
-<<<<<<< HEAD
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
-=======
 database_id = "be77ebc6-1d0e-4378-8f1b-f13e572ef145"
->>>>>>> e7e5a640abfad515f384e2b3155545564bfa3d44
 
 # KV Namespace Binding
 [[kv_namespaces]]
 binding = "ADMIN_KV"
-<<<<<<< HEAD
-id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
-=======
 id = "44b4e9e9ccb540cca922e2050780ff53"
->>>>>>> e7e5a640abfad515f384e2b3155545564bfa3d44

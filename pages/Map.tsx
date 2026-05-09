@@ -53,11 +53,7 @@ const CHINA_CITIES: Record<string, { coords: number[]; type: 'hub' | 'node' | 'e
   '延吉': { coords: [129.513228, 42.904823], type: 'edge' }
 };
 
-<<<<<<< HEAD
-const HUBS = ['北京', '上海', '深圳', '成都', '武汉', '广州'];
-=======
 const HUBS = ['北京', '上海', '喀什', '成都', '呼和浩特', '海口','哈尔滨'];
->>>>>>> e7e5a640abfad515f384e2b3155545564bfa3d44
 
 export const MapPage: React.FC = () => {
   const chartRef = useRef<HTMLDivElement>(null);
@@ -342,11 +338,7 @@ export const MapPage: React.FC = () => {
 
             try {
                 // Try fetching high-quality GeoJSON first
-<<<<<<< HEAD
-                const response = await fetch('https://geo.datav.aliyun.com/areas_v3/bound/100000_full.json');
-=======
                 const response = await fetch('/100000_full.json');
->>>>>>> e7e5a640abfad515f384e2b3155545564bfa3d44
                 if (!response.ok) throw new Error('Network error');
                 const geoJson = await response.json();
                 echarts.registerMap('china', geoJson);
