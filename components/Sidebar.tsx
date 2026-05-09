@@ -1,7 +1,11 @@
 
 import React from 'react';
 import { NavLink } from 'react-router-dom';
+<<<<<<< HEAD
+import { LayoutDashboard, Users, Map as MapIcon, CloudSun, UserCircle, LogOut, Bot, Image, Disc, BookOpen, CalendarClock, Code2, Crown, ClipboardList, FileCode } from 'lucide-react';
+=======
 import { LayoutDashboard, Users, Map as MapIcon, CloudSun, UserCircle, LogOut, Bot, Image, Disc, BookOpen, CalendarClock, Code2, Crown, ClipboardList } from 'lucide-react';
+>>>>>>> e7e5a640abfad515f384e2b3155545564bfa3d44
 import { RoutePath } from '../types';
 import { useApp } from '../contexts/AppContext';
 
@@ -22,6 +26,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ onLogout, isOpen, onCloseMobil
     { path: RoutePath.USERS, icon: Users, label: t('userManagement') },
     { path: RoutePath.LOGIN_HISTORY, icon: ClipboardList, label: '登录审计' },
     { path: RoutePath.SNIPPETS, icon: Code2, label: '代码片段库' },
+<<<<<<< HEAD
+    { path: RoutePath.CODE_IMPL, icon: FileCode, label: '代码实现' },
+=======
+>>>>>>> e7e5a640abfad515f384e2b3155545564bfa3d44
     { path: RoutePath.GALLERY, icon: Image, label: '照片墙' },
     { path: RoutePath.MUSIC, icon: Disc, label: 'CD 音乐机' },
     { path: RoutePath.MAP, icon: MapIcon, label: t('maps') },

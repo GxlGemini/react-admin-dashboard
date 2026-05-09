@@ -17,7 +17,11 @@ export const Login: React.FC = () => {
 
   // Form State
   const [username, setUsername] = useState('root');
+<<<<<<< HEAD
+  const [password, setPassword] = useState('');
+=======
   const [password, setPassword] = useState('root');
+>>>>>>> e7e5a640abfad515f384e2b3155545564bfa3d44
   const [nickname, setNickname] = useState(''); // For registration
   const [showPassword, setShowPassword] = useState(false);
   
