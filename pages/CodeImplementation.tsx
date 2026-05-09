@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileCode, LayoutDashboard, Database, Bot, Disc, Map as MapIcon, CloudSun, Crown, UserCircle } from 'lucide-react';
+import { FileCode, LayoutDashboard, Database, Bot, Disc, Map as MapIcon, CloudSun, Crown, UserCircle, BookOpen } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import Prism from 'prismjs';
 
